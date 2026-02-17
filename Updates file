@@ -1,0 +1,40 @@
+{
+  "placeholders": {
+
+    "Promoter_Shareholding_Pattern_Pre_IPO_Nos": "",
+    "Promoter_Shareholding_Pattern_Pre_IPO_Percentage": "",
+    "Promoter_Shareholding_Pattern_Post_IPO_Nos": "",
+    "Promoter_Shareholding_Pattern_Post_IPO_Percentage": "",
+
+    "Promoter_Group_Shareholding_Pattern_Pre_IPO_Nos": "",
+    "Promoter_Group_Shareholding_Pattern_Pre_IPO_Percentage": "",
+    "Promoter_Group_Shareholding_Pattern_Post_IPO_Nos": "",
+    "Promoter_Group_Shareholding_Pattern_Post_IPO_Percentage": "",
+
+    "Subtotal_A_Shareholding_Pattern_Pre_IPO_Nos": "",
+    "Subtotal_A_Shareholding_Pattern_Pre_IPO_Percentage": "",
+    "Subtotal_A_Shareholding_Pattern_Post_IPO_Nos": "",
+    "Subtotal_A_Shareholding_Pattern_Post_IPO_Percentage": "",
+
+    "AIF_Individuals_Corporates_Shareholding_Pattern_Pre_IPO_Nos": "",
+    "AIF_Individuals_Corporates_Shareholding_Pattern_Pre_IPO_Percentage": "",
+    "AIF_Individuals_Corporates_Shareholding_Pattern_Post_IPO_Nos": "",
+    "AIF_Individuals_Corporates_Shareholding_Pattern_Post_IPO_Percentage": "",
+
+    "IPO_Shareholders_Shareholding_Pattern_Pre_IPO_Nos": "",
+    "IPO_Shareholders_Shareholding_Pattern_Pre_IPO_Percentage": "",
+    "IPO_Shareholders_Shareholding_Pattern_Post_IPO_Nos": "",
+    "IPO_Shareholders_Shareholding_Pattern_Post_IPO_Percentage": "",
+
+    "Subtotal_B_Shareholding_Pattern_Pre_IPO_Nos": "",
+    "Subtotal_B_Shareholding_Pattern_Pre_IPO_Percentage": "",
+    "Subtotal_B_Shareholding_Pattern_Post_IPO_Nos": "",
+    "Subtotal_B_Shareholding_Pattern_Post_IPO_Percentage": "",
+
+    "Total_A_B_Shareholding_Pattern_Pre_IPO_Nos": "",
+    "Total_A_B_Shareholding_Pattern_Pre_IPO_Percentage": "",
+    "Total_A_B_Shareholding_Pattern_Post_IPO_Nos": "",
+    "Total_A_B_Shareholding_Pattern_Post_IPO_Percentage": ""
+
+  }
+}

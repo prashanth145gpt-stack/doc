@@ -1,328 +1,287 @@
 [
-  {
+    {
       "placeholders": {
-          "Name_of_Issuer_Company": "",
-          "MSME_status/_Udyam_Status": "",
-          "Date_of_Incorporation": "",
-          "Commencement_of_Operations": "",
-          "Address_of_Registered_Office": "",
-          "Address_of_Operating_facilities": ""
+        "Name_of_Issuer_Company": "",
+        "MSME_status/_Udyam_Status": "",
+        "Date_of_Incorporation": "",
+        "Commencement_of_Operations": "",
+        "Address_of_Registered_Office": "",
+        "Address_of_Operating_facilities": ""
       }
-  },
-  {
+    },
+    {
       "Brief_Background_of_company_and_promoters": ""
-  },
-  {
-      "Details_about_DRHP_filing_date,_approval_date": ""
-  },
-  {
-      "Details_about_Exchange_on_which_company_is_going_to_be_listed,_Merchant_banker_and_Registrar.": ""
-  },
-  {
+    },
+    {
+      "Details_about_DRHP_filing_date_approval_date": ""
+    },
+    {
+      "Details_about_Exchange_on_which_company_is_going_to_be_listed_Merchant_banker_and_Registrar.": ""
+    },
+    {
       "placeholders": {
-          "IPO_Date": "",
-          "Listing_Date": "",
-          "Face_Value": "",
-          "Issue_Price_Band": "",
-          "Lot_Size": "",
-          "Sale_Type": "",
-          "Issue_size": "",
-          "Issue_Type": "",
-          "Listing_At": "",
-          "Share_Holding_Pre_Issue": "",
-          "Share_Holding_Post_Issue": ""
+        "IPO_Date": "",
+        "Listing_Date": "",
+        "Face_Value": "",
+        "Issue_Price_Band": "",
+        "Lot_Size": "",
+        "Sale_Type": "",
+        "Issue_size": "",
+        "Issue_Type": "",
+        "Listing_At": "",
+        "Share_Holding_Pre_Issue": "",
+        "Share_Holding_Post_Issue": ""
       }
-  },
-  {
+    },
+    {
       "placeholders": {
-          "QIB_Shares_Offered_Shares_Offered": "",
-          "Retail_Shares_Offered_Shares_Offered": "",
-          "NII_Shares_Offered_Shares_Offered": ""
+        "QIB_Shares_Offered_Shares_Offered": "",
+        "Retail_Shares_Offered_Shares_Offered": "",
+        "NII_Shares_Offered_Shares_Offered": ""
       }
-  },
-  {
+    },
+    {
       "placeholders": {
-          "Assets_31_March_2025": "",
-          "Assets_31_Mar_2024": "",
-          "Assets_31_Mar_2023": "",
-          "Total_Income_31_March_2025": "",
-          "Total_Income_31_Mar_2024": "",
-          "Total_Income_31_Mar_2023": "",
-          "Profit_After_Tax_31_March_2025": "",
-          "Profit_After_Tax_31_Mar_2024": "",
-          "Profit_After_Tax_31_Mar_2023": "",
-          "Net_Worth_31_March_2025": "",
-          "Net_Worth_31_Mar_2024": "",
-          "Net_Worth_31_Mar_2023": "",
-          "Reserves_and_Surplus_31_March_2025": "",
-          "Reserves_and_Surplus_31_Mar_2024": "",
-          "Reserves_and_Surplus_31_Mar_2023": "",
-          "Total_Borrowing_31_March_2025": "",
-          "Total_Borrowing_31_Mar_2024": "",
-          "Total_Borrowing_31_Mar_2023": ""
+        "Assets_31_March_2025": "",
+        "Assets_31_Mar_2024": "",
+        "Assets_31_Mar_2023": "",
+        "Total_Income_31_March_2025": "",
+        "Total_Income_31_Mar_2024": "",
+        "Total_Income_31_Mar_2023": "",
+        "Profit_After_Tax_31_March_2025": "",
+        "Profit_After_Tax_31_Mar_2024": "",
+        "Profit_After_Tax_31_Mar_2023": "",
+        "Net_Worth_31_March_2025": "",
+        "Net_Worth_31_Mar_2024": "",
+        "Net_Worth_31_Mar_2023": "",
+        "Reserves_and_Surplus_31_March_2025": "",
+        "Reserves_and_Surplus_31_Mar_2024": "",
+        "Reserves_and_Surplus_31_Mar_2023": "",
+        "Total_Borrowing_31_March_2025": "",
+        "Total_Borrowing_31_Mar_2024": "",
+        "Total_Borrowing_31_Mar_2023": ""
       }
-  },
-  {
-      "Brief_about_company’s_projections,_profitability_etc": ""
-  },
-  {
+    },
+    {
+      "Brief_about_company’s_projections_profitability_etc": ""
+    },
+    {
       "placeholders": {
-          "Promoter_Shareholding_Pattern_Pre-IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Promoter_Shareholding_Pattern_Pre-IPO_Nos": "",
-          "Promoter_Shareholding_Pattern_Pre-IPO_%": "",
-          "Promoter_Shareholding_Pattern_Post_IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Promoter_Shareholding_Pattern_Post_IPO_Nos": "",
-          "Promoter_Shareholding_Pattern_Post_IPO_%": "",
-          "Promoter_group_Shareholding_Pattern_Pre-IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Promoter_group_Shareholding_Pattern_Pre-IPO_Nos": "",
-          "Promoter_group_Shareholding_Pattern_Pre-IPO_%": "",
-          "Promoter_group_Shareholding_Pattern_Post_IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Promoter_group_Shareholding_Pattern_Post_IPO_Nos": "",
-          "Promoter_group_Shareholding_Pattern_Post_IPO_%": "",
-          "Subtotal_(A)_Shareholding_Pattern_Pre-IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Subtotal_(A)_Shareholding_Pattern_Pre-IPO_Nos": "",
-          "Subtotal_(A)_Shareholding_Pattern_Pre-IPO_%": "",
-          "Subtotal_(A)_Shareholding_Pattern_Post_IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Subtotal_(A)_Shareholding_Pattern_Post_IPO_Nos": "",
-          "Subtotal_(A)_Shareholding_Pattern_Post_IPO_%": "",
-          "AIF/Individuals/corporates_Shareholding_Pattern_Pre-IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "AIF/Individuals/corporates_Shareholding_Pattern_Pre-IPO_Nos": "",
-          "AIF/Individuals/corporates_Shareholding_Pattern_Pre-IPO_%": "",
-          "AIF/Individuals/corporates_Shareholding_Pattern_Post_IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "AIF/Individuals/corporates_Shareholding_Pattern_Post_IPO_Nos": "",
-          "AIF/Individuals/corporates_Shareholding_Pattern_Post_IPO_%": "",
-          "IPO_shareholders_Shareholding_Pattern_Pre-IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "IPO_shareholders_Shareholding_Pattern_Pre-IPO_Nos": "",
-          "IPO_shareholders_Shareholding_Pattern_Pre-IPO_%": "",
-          "IPO_shareholders_Shareholding_Pattern_Post_IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "IPO_shareholders_Shareholding_Pattern_Post_IPO_Nos": "",
-          "IPO_shareholders_Shareholding_Pattern_Post_IPO_%": "",
-          "Subtotal_(B)_Shareholding_Pattern_Pre-IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Subtotal_(B)_Shareholding_Pattern_Pre-IPO_Nos": "",
-          "Subtotal_(B)_Shareholding_Pattern_Pre-IPO_%": "",
-          "Subtotal_(B)_Shareholding_Pattern_Post_IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Subtotal_(B)_Shareholding_Pattern_Post_IPO_Nos": "",
-          "Subtotal_(B)_Shareholding_Pattern_Post_IPO_%": "",
-          "Total_(A+B)_Shareholding_Pattern_Pre-IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Total_(A+B)_Shareholding_Pattern_Pre-IPO_Nos": "",
-          "Total_(A+B)_Shareholding_Pattern_Pre-IPO_%": "",
-          "Total_(A+B)_Shareholding_Pattern_Post_IPO_Equity_shares_-_FV_₹10/-_each": "",
-          "Total_(A+B)_Shareholding_Pattern_Post_IPO_Nos": "",
-          "Total_(A+B)_Shareholding_Pattern_Post_IPO_%": ""
+        "Promoter_Shareholding_Pattern_Pre-IPO_Nos": "",
+        "Promoter_Shareholding_Pattern_Pre-IPO_%": "",
+        "Promoter_Shareholding_Pattern_Post_IPO_Nos": "",
+        "Promoter_Shareholding_Pattern_Post_IPO_%": "",
+        "Promoter_group_Shareholding_Pattern_Pre-IPO_Nos": "",
+        "Promoter_group_Shareholding_Pattern_Pre-IPO_%": "",
+        "Promoter_group_Shareholding_Pattern_Post_IPO_Nos": "",
+        "Promoter_group_Shareholding_Pattern_Post_IPO_%": "",
+        "Subtotal_(A)_Shareholding_Pattern_Pre-IPO_Nos": "",
+        "Subtotal_(A)_Shareholding_Pattern_Pre-IPO_%": "",
+        "Subtotal_(A)_Shareholding_Pattern_Post_IPO_Nos": "",
+        "Subtotal_(A)_Shareholding_Pattern_Post_IPO_%": "",
+        "AIF/Individuals/corporates_Shareholding_Pattern_Pre-IPO_Nos": "",
+        "AIF/Individuals/corporates_Shareholding_Pattern_Pre-IPO_%": "",
+        "AIF/Individuals/corporates_Shareholding_Pattern_Post_IPO_Nos": "",
+        "AIF/Individuals/corporates_Shareholding_Pattern_Post_IPO_%": "",
+        "IPO_shareholders_Shareholding_Pattern_Pre-IPO_Nos": "",
+        "IPO_shareholders_Shareholding_Pattern_Pre-IPO_%": "",
+        "IPO_shareholders_Shareholding_Pattern_Post_IPO_Nos": "",
+        "IPO_shareholders_Shareholding_Pattern_Post_IPO_%": "",
+        "Subtotal_(B)_Shareholding_Pattern_Pre-IPO_Nos": "",
+        "Subtotal_(B)_Shareholding_Pattern_Pre-IPO_%": "",
+        "Subtotal_(B)_Shareholding_Pattern_Post_IPO_Nos": "",
+        "Subtotal_(B)_Shareholding_Pattern_Post_IPO_%": "",
+        "Total_(A+B)_Shareholding_Pattern_Pre-IPO_Nos": "",
+        "Total_(A+B)_Shareholding_Pattern_Pre-IPO_%": "",
+        "Total_(A+B)_Shareholding_Pattern_Post_IPO_Nos": "",
+        "Total_(A+B)_Shareholding_Pattern_Post_IPO_%": ""
       }
-  },
-  {
+    },
+    {
       "placeholders": {
-          "DRHP_should_have_been_approved_by_any_Stock_Exchange_/_SEBI._Criteria": "",
-          "DRHP_should_have_been_approved_by_any_Stock_Exchange_/_SEBI._Compliance": "",
-          "Should_have_availed_at_least_one_Debt_products_from_Banks/FIs_and_servicing_it_for_at_least_3_years_prior_to_the_date_of_filing_of_DRHP._and_/_or_should_have_availed_funding_from_any_SEBI_registered_AIFs_at_least_1_year_prior_to_the_date_of_filing_of_DRHP._Criteria": "",
-          "Should_have_availed_at_least_one_Debt_products_from_Banks/FIs_and_servicing_it_for_at_least_3_years_prior_to_the_date_of_filing_of_DRHP._and_/_or_should_have_availed_funding_from_any_SEBI_registered_AIFs_at_least_1_year_prior_to_the_date_of_filing_of_DRHP._Compliance": "",
-          "Net_worth_>_₹_20_crore_Criteria": "",
-          "Net_worth_>_₹_20_crore_Compliance": "",
-          "EBIDTA_margin_-_₹2.00_cr._or_>_5%_(whichever_is_more)_for_at_least_two_out_of_the_three_most_recent_financial_years_Criteria": "",
-          "EBIDTA_margin_-_₹2.00_cr._or_>_5%_(whichever_is_more)_for_at_least_two_out_of_the_three_most_recent_financial_years_Compliance": "",
-          "Total_Income_>_₹50_crore_Criteria": "",
-          "Total_Income_>_₹50_crore_Compliance": "",
-          "Net_Tangible_Assets_>_₹_2.50_crore_Criteria": "",
-          "Net_Tangible_Assets_>_₹_2.50_crore_Compliance": "",
-          "Profitability_(total_PBT_of_3_years)_>_₹_10_crore_Criteria": "",
-          "Profitability_(total_PBT_of_3_years)_>_₹_10_crore_Compliance": "",
-          "Exposure_cap_per_MSME:_Minimum:_₹_1_crore_Maximum:_Up_to_₹_20_crore._Note:_Anchor_investment_shall_not_exceed_50%_of_the_Anchor_portion_of_the_Issue_or_10%_of_the_post_issue_paid-up_capital_of_the_issuer_company,_whichever_is_lower._Criteria": "",
-          "Exposure_cap_per_MSME:_Minimum:_₹_1_crore_Maximum:_Up_to_₹_20_crore._Note:_Anchor_investment_shall_not_exceed_50%_of_the_Anchor_portion_of_the_Issue_or_10%_of_the_post_issue_paid-up_capital_of_the_issuer_company,_whichever_is_lower._Compliance": "",
-          "Minimum_Promoters_Shareholding_(Post_Issue)-_60%_In_case_where_the_Company_has_received_any_investment_from_a_SEBI_registered_AIF,_the_Investment_Committee_may_take_a_suitable_view_on_the_minimum_level_of_Promoter_Shareholding_below_60%_since_the_AIF_would_want_to_partially_/_fully_exit_in_the_proposed_IPO_/_Offer_for_Sale_(OFS)._Criteria": "",
-          "Minimum_Promoters_Shareholding_(Post_Issue)-_60%_In_case_where_the_Company_has_received_any_investment_from_a_SEBI_registered_AIF,_the_Investment_Committee_may_take_a_suitable_view_on_the_minimum_level_of_Promoter_Shareholding_below_60%_since_the_AIF_would_want_to_partially_/_fully_exit_in_the_proposed_IPO_/_Offer_for_Sale_(OFS)._Compliance": "",
-          "Complied_with_Minimum_₹_2_Cr._Bid_criteria_of_SEBI_Criteria": "",
-          "Complied_with_Minimum_₹_2_Cr._Bid_criteria_of_SEBI_Compliance": "",
-          "Complied_with_RBI’s_guideline_limiting_post-issue_shareholding_exposure_to_a_maximum_of_10%._Criteria": "",
-          "Complied_with_RBI’s_guideline_limiting_post-issue_shareholding_exposure_to_a_maximum_of_10%._Compliance": ""
+        "DRHP_should_have_been_approved_by_any_Stock_Exchange_/_SEBI._Compliance": "",
+        "Should_have_availed_at_least_one_Debt_products_from_Banks/FIs_and_servicing_it_for_at_least_3_years_prior_to_the_date_of_filing_of_DRHP._and_/_or_should_have_availed_funding_from_any_SEBI_registered_AIFs_at_least_1_year_prior_to_the_date_of_filing_of_DRHP._Compliance": "",
+        "Net_worth_>_₹_20_crore_Compliance": "",
+        "EBIDTA_margin_-_₹2.00_cr._or_>_5%_(whichever_is_more)_for_at_least_two_out_of_the_three_most_recent_financial_years_Compliance": "",
+        "Total_Income_>_₹50_crore_Compliance": "",
+        "Net_Tangible_Assets_>_₹_2.50_crore_Compliance": "",
+        "Profitability_(total_PBT_of_3_years)_>_₹_10_crore_Compliance": "",
+        "Exposure_cap_per_MSME:_Minimum:_₹_1_crore_Maximum:_Up_to_₹_20_crore._Note:_Anchor_investment_shall_not_exceed_50%_of_the_Anchor_portion_of_the_Issue_or_10%_of_the_post_issue_paid-up_capital_of_the_issuer_company_whichever_is_lower._Compliance": "",
+        "Minimum_Promoters_Shareholding_(Post_Issue)-_60%_In_case_where_the_Company_has_received_any_investment_from_a_SEBI_registered_AIF_the_Investment_Committee_may_take_a_suitable_view_on_the_minimum_level_of_Promoter_Shareholding_below_60%_since_the_AIF_would_want_to_partially_/_fully_exit_in_the_proposed_IPO_/_Offer_for_Sale_(OFS)._Compliance": "",
+        "Complied_with_Minimum_₹_2_Cr._Bid_criteria_of_SEBI_Compliance": "",
+        "Complied_with_RBI’s_guideline_limiting_post-issue_shareholding_exposure_to_a_maximum_of_10%._Compliance": ""
       }
-  },
-  {
+    },
+    {
       "Brief_about_industry": ""
-  },
-  {
+    },
+    {
       "placeholders": {
-          "1_Objective_of_the_Issue": "",
-          "1_Amount_(₹_crore)": "",
-          "1_%": "",
-          "2_Objective_of_the_Issue": "",
-          "2_Amount_(₹_crore)": "",
-          "2_%": "",
-          "3_Objective_of_the_Issue": "",
-          "3_Amount_(₹_crore)": "",
-          "3_%": "",
-          "4_Objective_of_the_Issue": "",
-          "4_Amount_(₹_crore)": "",
-          "4_%": "",
-          "5_Objective_of_the_Issue": "",
-          "5_Amount_(₹_crore)": "",
-          "5_%": "",
-          "6_Objective_of_the_Issue": "",
-          "6_Amount_(₹_crore)": "",
-          "6_%": "",
-          "7_Objective_of_the_Issue": "",
-          "7_Amount_(₹_crore)": "",
-          "7_%": "",
-          "Total_Objective_of_the_Issue": "",
-          "Total_Amount_(₹_crore)": "",
-          "Total_%": ""
+        "1_Items": "",
+        "1_Amount_(₹_crore)": "",
+        "1_%": "",
+        "2_Items": "",
+        "2_Amount_(₹_crore)": "",
+        "2_%": "",
+        "3_Items": "",
+        "3_Amount_(₹_crore)": "",
+        "3_%": "",
+        "4_Items": "",
+        "4_Amount_(₹_crore)": "",
+        "4_%": "",
+        "Total_Items": "",
+        "Total_Amount_(₹_crore)": "",
+        "Total_%": ""
       }
-  },
-  {
+    },
+    {
       "Brief_about_basis_of_valuation": ""
-  },
-  {
+    },
+    {
       "placeholders": {
-          "PAT_(`_in_lakh)_Mar-25": "",
-          "PAT_(`_in_lakh)_Mar-24": "",
-          "PAT_(`_in_lakh)_Mar-23": "",
-          "EPS_Mar-25": "",
-          "EPS_Mar-24": "",
-          "EPS_Mar-23": "",
-          "EPS_after_adjusting_Bonus_Mar-25": "",
-          "EPS_after_adjusting_Bonus_Mar-24": "",
-          "EPS_after_adjusting_Bonus_Mar-23": "",
-          "EPS_after_Proposed_Issue_Mar-25": "",
-          "EPS_after_Proposed_Issue_Mar-24": "",
-          "EPS_after_Proposed_Issue_Mar-23": "",
-          "Weight_Mar-25": "",
-          "Weight_Mar-24": "",
-          "Weight_Mar-23": "",
-          "EPS_Product_Mar-25": "",
-          "EPS_Product_Mar-24": "",
-          "EPS_Product_Mar-23": "",
-          "PE_Ratio_(2025_EPS)_Mar-25": "",
-          "PE_Ratio_(2025_EPS)_Mar-24": "",
-          "PE_Ratio_(2025_EPS)_Mar-23": "",
-          "PE_Ratio_Weighted_Average_EPS_Mar-25": "",
-          "PE_Ratio_Weighted_Average_EPS_Mar-24": "",
-          "PE_Ratio_Weighted_Average_EPS_Mar-23": "",
-          "PE_Ratio_Post_issue_based_on_FY_2025_Earning_Mar-25": "",
-          "PE_Ratio_Post_issue_based_on_FY_2025_Earning_Mar-24": "",
-          "PE_Ratio_Post_issue_based_on_FY_2025_Earning_Mar-23": "",
-          "Price_(Rs)_Mar-25": "",
-          "Price_(Rs)_Mar-24": "",
-          "Price_(Rs)_Mar-23": "",
-          "Issue_Size_(Rs_Cr)_-_Public_Mar-25": "",
-          "Issue_Size_(Rs_Cr)_-_Public_Mar-24": "",
-          "Issue_Size_(Rs_Cr)_-_Public_Mar-23": "",
-          "Post_Issue_Valuation_of_Company_(Rs_Cr)_Mar-25": "",
-          "Post_Issue_Valuation_of_Company_(Rs_Cr)_Mar-24": "",
-          "Post_Issue_Valuation_of_Company_(Rs_Cr)_Mar-23": "",
-          "Pre_Issue_PBV_Mar-25": "",
-          "Pre_Issue_PBV_Mar-24": "",
-          "Pre_Issue_PBV_Mar-23": "",
-          "Post_Issue_Book_Value_Mar-25": "",
-          "Post_Issue_Book_Value_Mar-24": "",
-          "Post_Issue_Book_Value_Mar-23": "",
-          "Post_Issue_PBV_Mar-25": "",
-          "Post_Issue_PBV_Mar-24": "",
-          "Post_Issue_PBV_Mar-23": "",
-          "Post_Issue_Networth_(`_cr)_Mar-25": "",
-          "Post_Issue_Networth_(`_cr)_Mar-24": "",
-          "Post_Issue_Networth_(`_cr)_Mar-23": ""
+        "PAT_(`_in_lakh)_Mar-25": "",
+        "PAT_(`_in_lakh)_Mar-24": "",
+        "PAT_(`_in_lakh)_Mar-23": "",
+        "EPS_Mar-25": "",
+        "EPS_Mar-24": "",
+        "EPS_Mar-23": "",
+        "EPS_after_adjusting_Bonus_Mar-25": "",
+        "EPS_after_adjusting_Bonus_Mar-24": "",
+        "EPS_after_adjusting_Bonus_Mar-23": "",
+        "EPS_after_Proposed_Issue_Mar-25": "",
+        "EPS_after_Proposed_Issue_Mar-24": "",
+        "EPS_after_Proposed_Issue_Mar-23": "",
+        "Weight_Mar-25": "",
+        "Weight_Mar-24": "",
+        "Weight_Mar-23": "",
+        "EPS_Product_Mar-25": "",
+        "EPS_Product_Mar-24": "",
+        "EPS_Product_Mar-23": "",
+        "weighted_avg_eps": "",
+        "PE_Ratio_(2025_EPS)_Mar-25": "",
+        "PE_Ratio_(2025_EPS)_Mar-24": "",
+        "PE_Ratio_(2025_EPS)_Mar-23": "",
+        "PE_Ratio_Weighted_Average_EPS_Mar-25": "",
+        "PE_Ratio_Weighted_Average_EPS_Mar-24": "",
+        "PE_Ratio_Weighted_Average_EPS_Mar-23": "",
+        "PE_Ratio_Post_issue_based_on_FY_2025_Earning_Mar-25": "",
+        "PE_Ratio_Post_issue_based_on_FY_2025_Earning_Mar-24": "",
+        "PE_Ratio_Post_issue_based_on_FY_2025_Earning_Mar-23": "",
+        "Price_(Rs)_Mar-25": "",
+        "Price_(Rs)_Mar-24": "",
+        "Price_(Rs)_Mar-23": "",
+        "Issue_Size_(Rs_Cr)_-_Public_Mar-25": "",
+        "Issue_Size_(Rs_Cr)_-_Public_Mar-24": "",
+        "Issue_Size_(Rs_Cr)_-_Public_Mar-23": "",
+        "Post_Issue_Valuation_of_Company_(Rs_Cr)_Mar-25": "",
+        "Post_Issue_Valuation_of_Company_(Rs_Cr)_Mar-24": "",
+        "Post_Issue_Valuation_of_Company_(Rs_Cr)_Mar-23": "",
+        "Pre_Issue_PBV_Mar-25": "",
+        "Pre_Issue_PBV_Mar-24": "",
+        "Pre_Issue_PBV_Mar-23": "",
+        "Post_Issue_Book_Value_Mar-25": "",
+        "Post_Issue_Book_Value_Mar-24": "",
+        "Post_Issue_Book_Value_Mar-23": "",
+        "Post_Issue_PBV_Mar-25": "",
+        "Post_Issue_PBV_Mar-24": "",
+        "Post_Issue_PBV_Mar-23": "",
+        "Post_Issue_Networth_(`_cr)_Mar-25": "",
+        "Post_Issue_Networth_(`_cr)_Mar-24": "",
+        "Post_Issue_Networth_(`_cr)_Mar-23": ""
       }
-  },
-  {
+    },
+    {
       "placeholders": {
-          "1._Company_Name": "",
-          "1._FV": "",
-          "1._Net_Worth": "",
-          "1._Sales": "",
-          "1._PAT": "",
-          "1._EPS": "",
-          "1._Issue_Price": "",
-          "1._P/E": "",
-          "1._B.V_Pre-Issue": "",
-          "1._PBV": "",
-          "1._RONW(%)": "",
-          "Peer_1._Company_Name": "",
-          "Peer_1._FV": "",
-          "Peer_1._Net_Worth": "",
-          "Peer_1._Sales": "",
-          "Peer_1._PAT": "",
-          "Peer_1._EPS": "",
-          "Peer_1._Issue_Price": "",
-          "Peer_1._P/E": "",
-          "Peer_1._B.V_Pre-Issue": "",
-          "Peer_1._PBV": "",
-          "Peer_1._RONW(%)": "",
-          "Peer_2._Company_Name": "",
-          "Peer_2._FV": "",
-          "Peer_2._Net_Worth": "",
-          "Peer_2._Sales": "",
-          "Peer_2._PAT": "",
-          "Peer_2._EPS": "",
-          "Peer_2._Issue_Price": "",
-          "Peer_2._P/E": "",
-          "Peer_2._B.V_Pre-Issue": "",
-          "Peer_2._PBV": "",
-          "Peer_2._RONW(%)": ""
+        "1._Company_Name": "",
+        "1._FV": "",
+        "1._Net_worth": "",
+        "1._Sales": "",
+        "1._PAT": "",
+        "1._EPS": "",
+        "1._Issue_Price": "",
+        "1._P/E": "",
+        "1._B.V_Pre-Issue": "",
+        "1._PBV": "",
+        "1._RONW(%)": "",
+        "Peer_1._Company_Name": "",
+        "Peer_1._FV": "",
+        "Peer_1._Net_worth": "",
+        "Peer_1._Sales": "",
+        "Peer_1._PAT": "",
+        "Peer_1._EPS": "",
+        "Peer_1._Issue_Price": "",
+        "Peer_1._P/E": "",
+        "Peer_1._B.V_Pre-Issue": "",
+        "Peer_1._PBV": "",
+        "Peer_1._RONW(%)": "",
+        "Peer_2._Company_Name": "",
+        "Peer_2._FV": "",
+        "Peer_2._Net_worth": "",
+        "Peer_2._Sales": "",
+        "Peer_2._PAT": "",
+        "Peer_2._EPS": "",
+        "Peer_2._Issue_Price": "",
+        "Peer_2._P/E": "",
+        "Peer_2._B.V_Pre-Issue": "",
+        "Peer_2._PBV": "",
+        "Peer_2._RONW(%)": ""
       }
-  },
-  {
-    "placeholders": {
-      "Fresh_Issue_Shares": "",
-      "OFS_Promoters_Shares": ""
-    }
-  },
-  {
+    },
+    {
       "total_issue_size_price": ""
-  },
-  {
+    },
+    {
       "Number_of_shares": ""
-  },
-  {
-      "Number_of_lots": ""
-  },
-  {
-      "Number_of_shares": ""
-  },
-  {
-      "About_Promoter’s_experience": ""
-  },
-  {
-      "About_consistent_in_profitability": ""
-  },
-  {
-      "About_entry_barrier": ""
-  },
-  {
-      "Any_other_Rationale": ""
-  },
-  {
-      "About_Lead_and_Co-lead_merchant_bankers,_their_past_track_record": ""
-  },
-  {
+    },
+    {
+      "about_promoters_experience": ""
+    },
+    {
+      "about_consistent_in_profitability": ""
+    },
+    {
+      "about_entry_barriers": ""
+    },
+    {
+      "any_other_rationale": ""
+    },
+    {
+      "About_Lead_and_Co-lead_merchant_bankers_their_past_track_record": ""
+    },
+    {
       "Brief_about_Market_Maker_and_their_track_record": ""
-  },
-  {
-      "On_the_basis_of_Credibility_of_issuer,_Mechant_banker,_potential_of_returns,_Good_investor’s_backing_etc": ""
-  },
-  {
+    },
+    {
+      "On_the_basis_of_Credibility_of_issuer_Mechant_banker_potential_of_returns_Good_investors_backing_etc": ""
+    },
+    {
       "Date": ""
-  },
-  {
+    },
+    {
+      "Offer_for_sale_size": ""
+    },
+    {
       "placeholders": {
-          "Compliance_of_KYC_guidelines": "",
-          "KYC_Risk_Score": "",
-          "Verification_of_defaulters’_lists,_Watchout_Investor_website,_Income_Tax_defaulter_Search,_etc.": "",
-          "Verification_of_CIBIL_reports_For_Company_and_Promoters": "",
-          "JOCATA_Score": "",
-          "Market_Inquiries/_Feedback_from_references": "",
-          "Connected_Lending": "",
-          "Pending_court_cases_initiated_by_other_banks/_FIs_against_the_company,_promoters/director_etc,_if_any": "",
-          "Pending_court_cases_initiated_by_third_parties_(Debtors/_creditors/_competitors)_against_the_company,_promoters/director_etc,_if_any": "",
-          "Certification/_Compliances": "",
-          "If_any_Adverse_Audit_Remarks_in_last_3_years_audited_Annual_Reports": "",
-          "Position_of_statutory_dues": "",
-          "Contingent_Liability_if_any": "",
-          "BO_Remarks_(in_case_of_SIDBI_customer)": "",
-          "Remarks_of_MSME_Equity_Cell:": "",
-          "(a)_Credibility_of_Issuer": "",
-          "(b)_Credibility_of_Merchant_Banker": "",
-          "(c)_Liability_on_SIDBI": "",
-          "(d)_Proposed_Investment": ""
+        "Compliance_of_KYC_guidelines": "",
+        "KYC_Risk_Score": "",
+        "Verification_of_defaulters’_lists_Watchout_Investor_website_Income_Tax_defaulter_Search_etc.": "",
+        "Verification_of_CIBIL_reports_For_Company_and_Promoters": "",
+        "JOCATA_Score": "",
+        "Market_Inquiries/_Feedback_from_references": "",
+        "Connected_Lending_From_related_party_transaction_sub_section_under_summary_of_issue_document": "",
+        "Pending_court_cases_initiated_by_other_banks/_FIs_against_the_company_promoters/director_etc_if_any": "",
+        "Pending_court_cases_initiated_by_third_parties_(Debtors/_creditors/_competitors)_against_the_company_promoters/director_etc_if_any": "",
+        "Certification/_Compliances": "",
+        "If_any_Adverse_Audit_Remarks_in_last_3_years_audited_Annual_Reports": "",
+        "Position_of_statutory_dues": "",
+        "Contingent_Liability_if_any": "",
+        "BO_Remarks_(in_case_of_SIDBI_customer)": "",
+        "Remarks_of_MSME_Equity_Cell:": "",
+        "(a)_Credibility_of_Issuer": "",
+        "(b)_Credibility_of_Merchant_Banker": "",
+        "(c)_Liability_on_SIDBI": "",
+        "(d)_Proposed_Investment": ""
       }
-  }
-]
+    }
+  ]
+ 

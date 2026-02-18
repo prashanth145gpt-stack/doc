@@ -51,3 +51,6 @@
     ]
   }
 }
+
+
+Extract structured financial data from the peer comparison table in the document. First, carefully scan the entire header row of the table and identify all company names listed as column headers. Populate the Company_Names array with every company detected. Then, for each extracted company name, create one corresponding object inside the Companies array. Extract only the financial data for the Financial Year ended March 31, 2025 (FY 2025). Ignore all other years such as FY 2023 and FY 2024. Capture the values exactly as presented in the table without performing calculations or assumptions. If any value is not available, return null. Ensure that the number of objects inside the Companies array matches the number of company names identified. Do not stop after extracting the first company if multiple companies are present in the table. Return the output strictly in the specified JSON structure

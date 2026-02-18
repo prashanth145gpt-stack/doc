@@ -21,3 +21,33 @@
     }
   }
 ]
+
+
+
+{
+  "Peer_Comparison_2025": {
+    "Company_Names": [],
+    "Companies": [
+      {
+        "Company_Name": "",
+        "FY_2025_Data": {
+          "Revenue_From_Operations": "",
+          "Total_Income": "",
+          "EBITDA": "",
+          "EBITDA_Margin_Percentage": "",
+          "Profit_Before_Tax": "",
+          "Profit_After_Tax": "",
+          "PAT_Margin_Percentage": "",
+          "Net_Worth": "",
+          "ROE_Percentage": "",
+          "ROCE_Percentage": "",
+          "Net_Working_Capital_Days": "",
+          "EPS_Basic": "",
+          "EPS_Diluted": "",
+          "PE_Based_on_Diluted_EPS": "",
+          "RONW_Percentage": ""
+        }
+      }
+    ]
+  }
+}

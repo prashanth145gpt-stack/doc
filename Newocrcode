@@ -1,340 +1,144 @@
-import io
-from dataclasses import dataclass
-from typing import List
-
-import fitz
-import numpy as np
 import cv2
-from PIL import Image
-
-import easyocr
-
+import numpy as np
+import re
+import fitz  # PyMuPDF
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import StreamingResponse
-
-# =====================================
-# STANDARD CONFIG
-# =====================================
-
-DPI = 300
-MAX_EDGE = 2400
-OCR_CONF = 0.35
-MAX_TOKENS_PER_PAGE = 1200
-
-# =====================================
-# FASTAPI + OCR INIT
-# =====================================
-
-app = FastAPI(title="Scanned PDF OCR Service")
-
-reader = easyocr.Reader(["en"], gpu=False)
-
-# =====================================
-# TOKEN STRUCTURE
-# =====================================
-
-@dataclass
-class Token:
-    text: str
-    x: float
-    y: float
-
-
-# =====================================
-# PDF → IMAGE PAGES
-# =====================================
-
-def rasterize_pdf(pdf_bytes):
-
-    pages = []
-
-    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-
-        mat = fitz.Matrix(DPI/72, DPI/72)
-
-        for page in doc:
-
-            pix = page.get_pixmap(matrix=mat)
-
-            img = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
-
-            w,h = img.size
-
-            if max(w,h) > MAX_EDGE:
-
-                scale = MAX_EDGE/max(w,h)
-
-                img = img.resize((int(w*scale),int(h*scale)))
-
-            pages.append(img)
-
-    return pages
-
-
-# =====================================
+from paddleocr import PaddleOCR
+ 
+app = FastAPI()
+ocr = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+# -----------------------------
+# PDF → IMAGE CONVERSION
+# -----------------------------
+def pdf_to_images(pdf_bytes):
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    images = []
+    for page in doc:
+        pix = page.get_pixmap(dpi=300)
+        img = np.frombuffer(pix.samples, dtype=np.uint8)
+        img = img.reshape(pix.h, pix.w, pix.n)
+        if pix.n == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        images.append(img)
+    return images
+# -----------------------------
 # QUALITY CHECK
-# =====================================
-
+# -----------------------------
 def quality_check(img):
-
-    gray = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
-
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blur = cv2.Laplacian(gray, cv2.CV_64F).var()
-    contrast = gray.std()
-
-    h,w = gray.shape
-
-    if w < 900 or h < 900:
+    brightness = np.mean(gray)
+    if blur < 60:
         return False
-
-    if blur < 15:
+    if brightness < 30:
         return False
-
-    if contrast < 18:
-        return False
-
     return True
-
-
-# =====================================
-# IMAGE PREPROCESSING
-# =====================================
-
-def preprocess(img):
-
-    gray = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
-
-    blur = cv2.medianBlur(gray,3)
-
+ 
+# -----------------------------
+# AUTO ROTATE
+# -----------------------------
+def auto_rotate(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    lines = cv2.HoughLines(edges, 1, np.pi/180, 200)
+    if lines is None:
+        return img
+    angles = []
+    for rho, theta in lines[:,0]:
+        angle = (theta * 180 / np.pi) - 90
+        angles.append(angle)
+    median_angle = np.median(angles)
+    h, w = img.shape[:2]
+    M = cv2.getRotationMatrix2D((w//2, h//2), median_angle, 1)
+    rotated = cv2.warpAffine(img, M, (w, h))
+    return rotated
+ 
+# -----------------------------
+# SHADOW REMOVAL
+# -----------------------------
+def remove_shadow(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    dilated = cv2.dilate(gray, np.ones((7,7),np.uint8))
+    bg = cv2.medianBlur(dilated, 21)
+    diff = 255 - cv2.absdiff(gray, bg)
+    norm = cv2.normalize(diff, None, 0, 255, cv2.NORM_MINMAX)
+    return norm
+ 
+# -----------------------------
+# REMOVE TABLE LINES
+# -----------------------------
+def remove_lines(img):
     thresh = cv2.adaptiveThreshold(
-        blur,
+        img,
         255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31,
-        15
+        cv2.ADAPTIVE_THRESH_MEAN_C,
+        cv2.THRESH_BINARY_INV,
+        15,
+        10
     )
-
-    return cv2.cvtColor(thresh,cv2.COLOR_GRAY2RGB)
-
-
-# =====================================
-# OCR TOKEN EXTRACTION
-# =====================================
-
-def extract_tokens(img):
-
-    results = reader.readtext(img)
-
-    tokens = []
-
-    for bbox,text,conf in results:
-
-        if conf < OCR_CONF:
-            continue
-
-        xs = [p[0] for p in bbox]
-        ys = [p[1] for p in bbox]
-
-        cx = sum(xs)/4
-        cy = sum(ys)/4
-
-        tokens.append(Token(text.strip(),cx,cy))
-
-    return tokens
-
-
-# =====================================
-# COLUMN DETECTION
-# =====================================
-
-def split_columns(tokens):
-
-    xs = [t.x for t in tokens]
-
-    if not xs:
-        return [tokens]
-
-    mid = (min(xs)+max(xs))/2
-
-    left = [t for t in tokens if t.x <= mid]
-    right = [t for t in tokens if t.x > mid]
-
-    if len(right) < 5:
-        return [tokens]
-
-    return [left,right]
-
-
-# =====================================
-# GROUP TOKENS INTO LINES
-# =====================================
-
-def group_lines(tokens):
-
-    tokens = sorted(tokens,key=lambda t:(t.y,t.x))
-
-    lines=[]
-    current=[]
-    last_y=None
-
-    for t in tokens:
-
-        if last_y is None or abs(t.y-last_y) < 18:
-
-            current.append(t)
-
-        else:
-
-            current=sorted(current,key=lambda z:z.x)
-
-            lines.append(current)
-
-            current=[t]
-
-        last_y=t.y
-
-    if current:
-
-        current=sorted(current,key=lambda z:z.x)
-
-        lines.append(current)
-
-    text_lines=[]
-
+    horizontal = cv2.getStructuringElement(cv2.MORPH_RECT,(40,1))
+    remove_h = cv2.morphologyEx(thresh,cv2.MORPH_OPEN,horizontal)
+    vertical = cv2.getStructuringElement(cv2.MORPH_RECT,(1,40))
+    remove_v = cv2.morphologyEx(thresh,cv2.MORPH_OPEN,vertical)
+    mask = cv2.add(remove_h, remove_v)
+    cleaned = cv2.subtract(thresh, mask)
+    cleaned = cv2.bitwise_not(cleaned)
+    return cleaned
+ 
+# -----------------------------
+# OCR
+# -----------------------------
+def run_ocr(img):
+    result = ocr.ocr(img)
+    lines = []
+    for line in result[0]:
+        text = line[1][0]
+        lines.append(text)
+    return lines
+ 
+# -----------------------------
+# TEXT STRUCTURE
+# -----------------------------
+def structure_text(lines):
+    number_pattern = r"\d{1,3}(?:,\d{3})*(?:\.\d+)"
+    structured = []
     for line in lines:
-
-        txt=" ".join(t.text for t in line)
-
-        text_lines.append(txt)
-
-    return text_lines
-
-
-# =====================================
-# STRUCTURE DETECTION
-# =====================================
-
-def detect_structure(lines):
-
-    structured=[]
-
-    for line in lines:
-
-        s=line.strip()
-
-        if not s:
-            continue
-
-        # heading
-        if s.isupper() and len(s.split())<6:
-
-            structured.append(f"#{s.replace(' ','_')}")
-
-        # key value
-        elif ":" in s:
-
-            key,val=s.split(":",1)
-
-            structured.append(f"{key.strip()}..{val.strip()}")
-
-        # table row
-        elif len(s.split())>=3:
-
-            structured.append(s.replace(" ","_"))
-
+        numbers = re.findall(number_pattern, line)
+        if len(numbers) >= 2:
+            text = re.sub(number_pattern, "", line).strip()
+            structured.append(text)
+            structured.append(f"    Value1: {numbers[0]}")
+            structured.append(f"    Value2: {numbers[1]}")
+            structured.append("")
         else:
-
-            structured.append(s)
-
-    return structured
-
-
-# =====================================
-# TOKEN COMPRESSION
-# =====================================
-
-def compress_text(lines):
-
-    text=" ".join(lines)
-
-    words=text.split()
-
-    if len(words)>MAX_TOKENS_PER_PAGE:
-
-        words=words[:MAX_TOKENS_PER_PAGE]
-
-    return " ".join(words)
-
-
-# =====================================
-# PROCESS PAGE
-# =====================================
-
-def process_page(img,page_number):
-
-    if not quality_check(img):
-
-        return f"##PAGE_{page_number}\nSKIPPED_BAD_SCAN"
-
-    img=preprocess(img)
-
-    tokens=extract_tokens(img)
-
-    columns=split_columns(tokens)
-
-    lines=[]
-
-    for col in columns:
-
-        col_lines=group_lines(col)
-
-        lines.extend(col_lines)
-
-    structured=detect_structure(lines)
-
-    text=compress_text(structured)
-
-    return f"##PAGE_{page_number}\n{text}"
-
-
-# =====================================
-# PROCESS DOCUMENT
-# =====================================
-
+            structured.append(line)
+    return "\n".join(structured)
+ 
+ 
+# -----------------------------
+# FULL PIPELINE
+# -----------------------------
 def process_pdf(pdf_bytes):
-
-    pages=rasterize_pdf(pdf_bytes)
-
-    output=[]
-
-    for i,img in enumerate(pages):
-
-        page_text=process_page(img,i+1)
-
-        output.append(page_text)
-
-    return output
-
-
-# =====================================
+    pages = pdf_to_images(pdf_bytes)
+    all_text = []
+    for i, img in enumerate(pages):
+        if not quality_check(img):
+            continue
+        img = auto_rotate(img)
+        img = remove_shadow(img)
+        img = remove_lines(img)
+        lines = run_ocr(img)
+        text = structure_text(lines)
+        all_text.append(f"\n\n--- PAGE {i+1} ---\n\n")
+        all_text.append(text)
+    return "\n".join(all_text)
+ 
+# -----------------------------
 # FASTAPI ENDPOINT
-# =====================================
-
-@app.post("/ocr")
-
-async def ocr_pdf(file:UploadFile=File(...)):
-
-    pdf_bytes=await file.read()
-
-    pages=process_pdf(pdf_bytes)
-
-    final_text="\n\n".join(pages)
-
-    buffer=io.StringIO(final_text)
-
-    return StreamingResponse(
-        iter([buffer.getvalue()]),
-        media_type="text/plain",
-        headers={"Content-Disposition":"attachment; filename=ocr_output.txt"}
-    )
+# -----------------------------
+@app.post("/extract-text")
+async def extract_text(file: UploadFile = File(...)):
+    pdf_bytes = await file.read()
+    text = process_pdf(pdf_bytes)
+    return {"text": text}
+ 

@@ -1,0 +1,143 @@
+import cv2
+import numpy as np
+import re
+import fitz  # PyMuPDF
+from fastapi import FastAPI, UploadFile, File
+from paddleocr import PaddleOCR
+
+app = FastAPI()
+ocr = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+# -----------------------------
+# PDF → IMAGE CONVERSION
+# -----------------------------Padde
+def pdf_to_images(pdf_bytes):
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    images = []
+    for page in doc:
+        pix = page.get_pixmap(dpi=300)
+        img = np.frombuffer(pix.samples, dtype=np.uint8)
+        img = img.reshape(pix.h, pix.w, pix.n)
+        if pix.n == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        images.append(img)
+    return images
+# -----------------------------
+# QUALITY CHECK
+# -----------------------------
+def quality_check(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blur = cv2.Laplacian(gray, cv2.CV_64F).var()
+    brightness = np.mean(gray)
+    if blur < 60:
+        return False
+    if brightness < 30:
+        return False
+    return True
+
+# -----------------------------
+# AUTO ROTATE
+# -----------------------------
+def auto_rotate(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    lines = cv2.HoughLines(edges, 1, np.pi/180, 200)
+    if lines is None:
+        return img
+    angles = []
+    for rho, theta in lines[:,0]:
+        angle = (theta * 180 / np.pi) - 90
+        angles.append(angle)
+    median_angle = np.median(angles)
+    h, w = img.shape[:2]
+    M = cv2.getRotationMatrix2D((w//2, h//2), median_angle, 1)
+    rotated = cv2.warpAffine(img, M, (w, h))
+    return rotated
+
+# -----------------------------
+# SHADOW REMOVAL
+# -----------------------------
+def remove_shadow(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    dilated = cv2.dilate(gray, np.ones((7,7),np.uint8))
+    bg = cv2.medianBlur(dilated, 21)
+    diff = 255 - cv2.absdiff(gray, bg)
+    norm = cv2.normalize(diff, None, 0, 255, cv2.NORM_MINMAX)
+    return norm
+
+# -----------------------------
+# REMOVE TABLE LINES
+# -----------------------------
+def remove_lines(img):
+    thresh = cv2.adaptiveThreshold(
+        img,
+        255,
+        cv2.ADAPTIVE_THRESH_MEAN_C,
+        cv2.THRESH_BINARY_INV,
+        15,
+        10
+    )
+    horizontal = cv2.getStructuringElement(cv2.MORPH_RECT,(40,1))
+    remove_h = cv2.morphologyEx(thresh,cv2.MORPH_OPEN,horizontal)
+    vertical = cv2.getStructuringElement(cv2.MORPH_RECT,(1,40))
+    remove_v = cv2.morphologyEx(thresh,cv2.MORPH_OPEN,vertical)
+    mask = cv2.add(remove_h, remove_v)
+    cleaned = cv2.subtract(thresh, mask)
+    cleaned = cv2.bitwise_not(cleaned)
+    return cleaned
+
+# -----------------------------
+# OCR
+# -----------------------------
+def run_ocr(img):
+    result = ocr.ocr(img)
+    lines = []
+    for line in result[0]:
+        text = line[1][0]
+        lines.append(text)
+    return lines
+
+# -----------------------------
+# TEXT STRUCTURE
+# -----------------------------
+def structure_text(lines):
+    number_pattern = r"\d{1,3}(?:,\d{3})*(?:\.\d+)"
+    structured = []
+    for line in lines:
+        numbers = re.findall(number_pattern, line)
+        if len(numbers) >= 2:
+            text = re.sub(number_pattern, "", line).strip()
+            structured.append(text)
+            structured.append(f"    Value1: {numbers[0]}")
+            structured.append(f"    Value2: {numbers[1]}")
+            structured.append("")
+        else:
+            structured.append(line)
+    return "\n".join(structured)
+
+
+# -----------------------------
+# FULL PIPELINE
+# -----------------------------
+def process_pdf(pdf_bytes):
+    pages = pdf_to_images(pdf_bytes)
+    all_text = []
+    for i, img in enumerate(pages):
+        if not quality_check(img):
+            continue
+        img = auto_rotate(img)
+        img = remove_shadow(img)
+        img = remove_lines(img)
+        lines = run_ocr(img)
+        text = structure_text(lines)
+        all_text.append(f"\n\n--- PAGE {i+1} ---\n\n")
+        all_text.append(text)
+    return "\n".join(all_text)
+
+# -----------------------------
+# FASTAPI ENDPOINT
+# -----------------------------
+@app.post("/extract-text")
+async def extract_text(file: UploadFile = File(...)):
+    pdf_bytes = await file.read()
+    text = process_pdf(pdf_bytes)
+    return {"text": text}

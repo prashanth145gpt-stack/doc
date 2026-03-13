@@ -1,0 +1,312 @@
+import io
+from dataclasses import dataclass
+from typing import List
+
+import fitz
+import numpy as np
+import cv2
+from PIL import Image
+
+import easyocr
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse
+
+# =============================
+# Standard configuration
+# =============================
+
+DPI = 300
+MAX_EDGE = 2500
+OCR_CONF = 0.30
+
+app = FastAPI(title="PDF OCR → Structured Markdown")
+
+reader = easyocr.Reader(["en"], gpu=False)
+
+
+# =============================
+# Token structure
+# =============================
+
+@dataclass
+class Token:
+    text: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+    cx: float
+    cy: float
+
+
+# =============================
+# PDF → Images
+# =============================
+
+def rasterize_pdf(pdf_bytes):
+
+    pages = []
+
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+
+        mat = fitz.Matrix(DPI / 72, DPI / 72)
+
+        for page in doc:
+
+            pix = page.get_pixmap(matrix=mat)
+
+            img = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+
+            w, h = img.size
+
+            if max(w, h) > MAX_EDGE:
+                scale = MAX_EDGE / max(w, h)
+                img = img.resize((int(w * scale), int(h * scale)))
+
+            pages.append(img)
+
+    return pages
+
+
+# =============================
+# OCR
+# =============================
+
+def ocr_tokens(img):
+
+    results = reader.readtext(np.array(img))
+
+    tokens = []
+
+    for bbox, text, conf in results:
+
+        if conf < OCR_CONF:
+            continue
+
+        xs = [p[0] for p in bbox]
+        ys = [p[1] for p in bbox]
+
+        x0, y0 = min(xs), min(ys)
+        x1, y1 = max(xs), max(ys)
+
+        cx = (x0 + x1) / 2
+        cy = (y0 + y1) / 2
+
+        tokens.append(Token(text.strip(), x0, y0, x1, y1, cx, cy))
+
+    return tokens
+
+
+# =============================
+# Token → Lines
+# =============================
+
+def group_lines(tokens):
+
+    tokens = sorted(tokens, key=lambda t: (t.cy, t.cx))
+
+    lines = []
+    current = []
+    last_y = None
+
+    for t in tokens:
+
+        if last_y is None or abs(t.cy - last_y) < 15:
+            current.append(t)
+        else:
+            lines.append(current)
+            current = [t]
+
+        last_y = t.cy
+
+    if current:
+        lines.append(current)
+
+    return lines
+
+
+def lines_to_text(lines):
+
+    text_lines = []
+
+    for line in lines:
+
+        text = " ".join(t.text for t in line)
+
+        text_lines.append(text)
+
+    return text_lines
+
+
+# =============================
+# Detect tables
+# =============================
+
+def detect_table_rows(text_lines):
+
+    tables = []
+    rows = []
+
+    for line in text_lines:
+
+        words = line.split()
+
+        if len(words) >= 4:
+            rows.append(words)
+        else:
+            if rows:
+                tables.append(rows)
+                rows = []
+
+    if rows:
+        tables.append(rows)
+
+    return tables
+
+
+# =============================
+# Detect structured blocks
+# =============================
+
+def detect_blocks(text_lines):
+
+    blocks = []
+    paragraph = []
+
+    tables = detect_table_rows(text_lines)
+
+    table_lines = {tuple(r) for t in tables for r in t}
+
+    for line in text_lines:
+
+        s = line.strip()
+
+        if not s:
+            continue
+
+        # KV
+        if ":" in s and len(s.split(":")[0]) < 40:
+
+            key, val = s.split(":", 1)
+
+            blocks.append({
+                "type": "kv",
+                "key": key.strip(),
+                "value": val.strip()
+            })
+
+            continue
+
+        # Heading
+        if s.isupper() and len(s.split()) <= 6:
+
+            blocks.append({
+                "type": "heading",
+                "text": s
+            })
+
+            continue
+
+        # Table
+        words = tuple(s.split())
+
+        if words in table_lines:
+
+            blocks.append({
+                "type": "table_row",
+                "row": list(words)
+            })
+
+            continue
+
+        paragraph.append(s)
+
+    if paragraph:
+
+        blocks.append({
+            "type": "paragraph",
+            "text": " ".join(paragraph)
+        })
+
+    return blocks
+
+
+# =============================
+# Render Markdown text
+# =============================
+
+def render_markdown(blocks):
+
+    lines = []
+
+    for b in blocks:
+
+        if b["type"] == "heading":
+
+            lines.append(f"\n## {b['text']}\n")
+
+        elif b["type"] == "paragraph":
+
+            lines.append(b["text"] + "\n")
+
+        elif b["type"] == "kv":
+
+            lines.append(f"{b['key']} : {b['value']}")
+
+        elif b["type"] == "table_row":
+
+            row = b["row"]
+
+            lines.append("| " + " | ".join(row) + " |")
+
+    return "\n".join(lines)
+
+
+# =============================
+# OCR pipeline
+# =============================
+
+def process_page(img):
+
+    tokens = ocr_tokens(img)
+
+    lines = group_lines(tokens)
+
+    text_lines = lines_to_text(lines)
+
+    blocks = detect_blocks(text_lines)
+
+    return render_markdown(blocks)
+
+
+# =============================
+# FastAPI endpoint
+# =============================
+
+@app.post("/ocr")
+
+async def ocr_pdf(file: UploadFile = File(...)):
+
+    pdf_bytes = await file.read()
+
+    pages = rasterize_pdf(pdf_bytes)
+
+    result = []
+
+    for i, img in enumerate(pages):
+
+        page_text = process_page(img)
+
+        header = f"\n\n================ PAGE {i+1} ================\n\n"
+
+        result.append(header + page_text)
+
+    final_text = "\n".join(result)
+
+    buffer = io.StringIO(final_text)
+
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/plain",
+        headers={"Content-Disposition": "attachment; filename=ocr_output.txt"}
+    )

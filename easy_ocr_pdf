@@ -1,0 +1,750 @@
+
+import io
+import os
+import math
+import time
+import enum
+import gc
+from typing import List, Tuple, Dict, Any, Optional
+from dataclasses import dataclass
+
+import fitz  # PyMuPDF
+import numpy as np
+import cv2
+from PIL import Image
+
+import easyocr
+from fastapi import FastAPI, UploadFile, File, Query
+from fastapi.responses import StreamingResponse, JSONResponse
+
+
+# =========================
+# Config (env-tunable)
+# =========================
+DPI = int(os.getenv("RENDER_DPI", "300"))
+MIN_W = int(os.getenv("MIN_W", "1200"))
+MIN_H = int(os.getenv("MIN_H", "1200"))
+
+# Quality thresholds (conservative starters; tune with telemetry)
+SKEW_MAX_DEG_FAIL = float(os.getenv("SKEW_MAX_DEG_FAIL", "7.0"))
+SKEW_AUTO_DESKEW = float(os.getenv("SKEW_AUTO_DESKEW", "2.0"))
+BLUR_VAR_MIN = float(os.getenv("BLUR_VAR_MIN", "15.0"))
+CONTRAST_STD_MIN = float(os.getenv("CONTRAST_STD_MIN", "18.0"))
+
+OCR_CONF_MIN = float(os.getenv("OCR_CONF_MIN", "0.25"))
+
+# Page size cap to bound CPU/RAM (long edge)
+LONG_EDGE_MAX = int(os.getenv("LONG_EDGE_MAX", "3500"))
+
+# EasyOCR languages
+OCR_LANGS = os.getenv("OCR_LANGS", "en").split(",")
+
+# Output file name
+DEFAULT_OUT_NAME = os.getenv("DEFAULT_OUT_NAME", "ocr_output.txt")
+
+
+class Mode(str, enum.Enum):
+    full = "full"
+    compact = "compact"
+    tables = "tables"
+
+
+# =========================
+# Data structures
+# =========================
+@dataclass
+class Token:
+    text: str
+    conf: float
+    # Axis-aligned bbox (x0, y0, x1, y1) in px
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+    # Derived
+    cx: float
+    cy: float
+    h: float
+
+
+@dataclass
+class PageMetrics:
+    width: int
+    height: int
+    blur_var: float
+    contrast_std: float
+    skew_deg: float
+    ok: bool
+    failure_code: Optional[str] = None
+    reason: Optional[str] = None
+
+
+@dataclass
+class PageResult:
+    page_index: int
+    metrics: PageMetrics
+    tokens: List[Token]
+    blocks: List[Dict[str, Any]]  # heading/paragraph/kv/table blocks
+
+
+# =========================
+# App & global OCR
+# =========================
+app = FastAPI(title="Scanned PDF OCR → Structured Text")
+
+# Initialize OCR once (GPU toggle via env: EASYOCR_GPU=true/false)
+GPU = os.getenv("EASYOCR_GPU", "false").lower() == "true"
+reader = easyocr.Reader(OCR_LANGS, gpu=GPU)  # en + hi
+
+
+# =========================
+# Utilities
+# =========================
+def pil_from_pixmap(pix: fitz.Pixmap) -> Image.Image:
+    return Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+
+
+def rasterize_pdf(raw: bytes, dpi: int = DPI) -> List[Image.Image]:
+    """Always rasterize pages (treat as scanned)."""
+    pages = []
+    with fitz.open(stream=raw, filetype="pdf") as doc:
+        m = fitz.Matrix(dpi / 72, dpi / 72)
+        for p in doc:
+            pix = p.get_pixmap(matrix=m, alpha=False)
+            img = pil_from_pixmap(pix)
+            # Cap long edge
+            w, h = img.size
+            long_edge = max(w, h)
+            if long_edge > LONG_EDGE_MAX:
+                scale = LONG_EDGE_MAX / long_edge
+                img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+            pages.append(img)
+    return pages
+
+
+def to_cv(img: Image.Image) -> np.ndarray:
+    return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+
+def to_pil(img_cv: np.ndarray) -> Image.Image:
+    return Image.fromarray(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB))
+
+
+def estimate_skew_deg(gray: np.ndarray) -> float:
+    """Estimate skew using Hough transform on edges."""
+    # Downscale for speed
+    h, w = gray.shape
+    scale = 1000.0 / max(h, w)
+    if scale < 1.0:
+        gray_small = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+    else:
+        gray_small = gray.copy()
+
+    edges = cv2.Canny(gray_small, 50, 150, apertureSize=3)
+    lines = cv2.HoughLines(edges, 1, np.pi / 180.0, threshold=150)
+    if lines is None:
+        return 0.0
+
+    angles = []
+    for rho, theta in lines[:, 0]:
+        # convert to degrees around horizontal axis
+        ang = (theta * 180.0 / np.pi) - 90.0  # near 0 => horizontal
+        # Normalize to [-45, 45] for robustness
+        if ang > 45:
+            ang -= 90
+        if ang < -45:
+            ang += 90
+        angles.append(ang)
+
+    if not angles:
+        return 0.0
+    # robust: median
+    return float(np.median(angles))
+
+
+def deskew_bgr(img_bgr: np.ndarray, angle_deg: float) -> np.ndarray:
+    if abs(angle_deg) < 0.1:
+        return img_bgr
+    h, w = img_bgr.shape[:2]
+    center = (w // 2, h // 2)
+    mat = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
+    # Expand border to minimize crop
+    return cv2.warpAffine(img_bgr, mat, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+
+
+def quality_check_scan(pil_img: Image.Image) -> PageMetrics:
+    w, h = pil_img.size
+    gray = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2GRAY)
+
+    blur_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+    contrast_std = gray.std()
+    skew_deg = estimate_skew_deg(gray)
+
+    ok = True
+    code = None
+    reason = None
+
+    if w < MIN_W or h < MIN_H:
+        ok = False
+        code = "too_small"
+        reason = f"Rendered page too small ({w}x{h}). Re-scan ~300 DPI."
+    elif blur_var < BLUR_VAR_MIN:
+        ok = False
+        code = "too_blurry"
+        reason = "Page is blurry. Re-scan at 300 DPI with sharp focus."
+    elif contrast_std < CONTRAST_STD_MIN:
+        ok = False
+        code = "low_contrast"
+        reason = "Low contrast. Re-scan with better brightness/contrast."
+    elif abs(skew_deg) > SKEW_MAX_DEG_FAIL:
+        ok = False
+        code = "skew_too_high"
+        reason = f"Skew {skew_deg:.1f}° too high. Re-scan or straighten."
+
+    return PageMetrics(
+        width=w, height=h,
+        blur_var=float(blur_var),
+        contrast_std=float(contrast_std),
+        skew_deg=float(skew_deg),
+        ok=ok, failure_code=code, reason=reason
+    )
+
+
+def preprocess_for_ocr(pil_img: Image.Image, skew_deg: float) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    """Return (text_variant_bgr, table_variant_bgr, extra_metrics)."""
+    img = to_cv(pil_img)
+
+    # Deskew if mild skew
+    if abs(skew_deg) >= SKEW_AUTO_DESKEW:
+        img = deskew_bgr(img, skew_deg)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # --- Text variant: adaptive thresholding
+    # Light denoise + adaptive threshold (Gaussian)
+    den = cv2.medianBlur(gray, 3)
+    text_bin = cv2.adaptiveThreshold(
+        den, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15
+    )
+    text_bgr = cv2.cvtColor(text_bin, cv2.COLOR_GRAY2BGR)
+
+    # --- Table variant: keep lines, gentle cleanup
+    table_gray = cv2.bilateralFilter(gray, 7, 30, 30)
+    table_bgr = cv2.cvtColor(table_gray, cv2.COLOR_GRAY2BGR)
+
+    return text_bgr, table_bgr, {}
+
+
+def _clamp(v, lo, hi):
+    return max(lo, min(hi, v))
+
+
+def easyocr_tokens(img_bgr: np.ndarray) -> List[Token]:
+    """Run OCR and convert EasyOCR output to Token list."""
+    # EasyOCR expects RGB
+    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    results = reader.readtext(rgb)
+
+    H, W = img_bgr.shape[:2]
+    tokens: List[Token] = []
+    for bbox, text, conf in results:
+        if conf is None or float(conf) < OCR_CONF_MIN:
+            continue
+        # bbox is 4 points (x,y)
+        xs = [p[0] for p in bbox]
+        ys = [p[1] for p in bbox]
+        x0 = int(math.floor(_clamp(min(xs), 0, W - 1)))
+        y0 = int(math.floor(_clamp(min(ys), 0, H - 1)))
+        x1 = int(math.ceil(_clamp(max(xs), 0, W)))
+        y1 = int(math.ceil(_clamp(max(ys), 0, H)))
+        if x1 <= x0 or y1 <= y0:
+            continue
+        h = y1 - y0
+        cx = (x0 + x1) / 2.0
+        cy = (y0 + y1) / 2.0
+        tokens.append(Token(text=str(text).strip(), conf=float(conf),
+                            x0=x0, y0=y0, x1=x1, y1=y1, cx=cx, cy=cy, h=h))
+    return tokens
+
+
+# =========================
+# Layout: lines & paragraphs
+# =========================
+def group_tokens_into_lines(tokens: List[Token]) -> List[List[Token]]:
+    if not tokens:
+        return []
+    # Sort by y, then x
+    tokens_sorted = sorted(tokens, key=lambda t: (t.cy, t.cx))
+    median_h = np.median([t.h for t in tokens_sorted]) if tokens_sorted else 12.0
+    # y-threshold to merge into same line
+    y_thresh = max(6.0, 0.6 * median_h)
+
+    lines: List[List[Token]] = []
+    cur: List[Token] = []
+    last_y = None
+
+    for t in tokens_sorted:
+        if last_y is None:
+            cur = [t]
+            last_y = t.cy
+            continue
+        if abs(t.cy - last_y) <= y_thresh:
+            cur.append(t)
+            last_y = (last_y * 0.7 + t.cy * 0.3)  # smooth
+        else:
+            # finalize previous line
+            cur = sorted(cur, key=lambda z: z.cx)
+            lines.append(cur)
+            cur = [t]
+            last_y = t.cy
+    if cur:
+        cur = sorted(cur, key=lambda z: z.cx)
+        lines.append(cur)
+
+    return lines
+
+
+def lines_to_text_lines(lines: List[List[Token]]) -> List[str]:
+    text_lines: List[str] = []
+    for line in lines:
+        s = " ".join(t.text for t in line if t.text)
+        s = s.replace(" - ", "-").replace(" : ", ":").strip()
+        text_lines.append(s)
+    return text_lines
+
+
+def detect_headings(lines: List[List[Token]]) -> Dict[int, int]:
+    """
+    Return mapping: line_index -> heading_level (1..3)
+    Heuristics: tall text lines, short length, ALL CAPS ratio, centered-ish.
+    """
+    if not lines:
+        return {}
+    heights = [np.median([t.h for t in ln]) if ln else 0 for ln in lines]
+    h95 = np.percentile(heights, 95) if heights else 0
+    h75 = np.percentile(heights, 75) if heights else 0
+
+    levels = {}
+    for i, ln in enumerate(lines):
+        txt = " ".join([t.text for t in ln])
+        if not txt:
+            continue
+        all_caps_ratio = sum(1 for ch in txt if ch.isalpha() and ch.isupper()) / max(1, sum(1 for ch in txt if ch.isalpha()))
+        med_h = np.median([t.h for t in ln]) if ln else 0
+        # center-ish if token centers around page center span
+        xs = [t.cx for t in ln]
+        centered = (max(xs) - min(xs)) < 0.8 * (np.median(xs) * 2.0) if xs else False
+
+        level = 0
+        if med_h >= h95 or (all_caps_ratio > 0.7 and med_h >= h75):
+            level = 1
+        elif med_h >= h75 or all_caps_ratio > 0.6:
+            level = 2
+        # small headings
+        elif all_caps_ratio > 0.5 and len(txt.split()) <= 6:
+            level = 3
+
+        if level > 0:
+            levels[i] = level
+    return levels
+
+
+def extract_key_values(text_lines: List[str]) -> List[Tuple[str, str]]:
+    kvs = []
+    for s in text_lines:
+        if ":" in s:
+            parts = s.split(":")
+            if len(parts) >= 2:
+                key = parts[0].strip().strip("-—")
+                val = ":".join(parts[1:]).strip()
+                # Filter out lines where key is too long (avoid false positives)
+                if 1 <= len(key) <= 40 and len(val) > 0:
+                    kvs.append((key, val))
+    return kvs
+
+
+# =========================
+# Tables
+# =========================
+def extract_tables_ruled(table_img_bgr: np.ndarray) -> List[Dict[str, Any]]:
+    """
+    Detect ruled tables using morphology + H/V line detection.
+    Return list of tables: each table has rows: list[list[Token or str]].
+    For MVP we will OCR the whole page already and then assign tokens to cells.
+    Here we only compute table cell boxes; assignment happens in reconcile step.
+    """
+    gray = cv2.cvtColor(table_img_bgr, cv2.COLOR_BGR2GRAY)
+    # Adaptive binary to enhance lines
+    bw = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                               cv2.THRESH_BINARY_INV, 31, 15)
+    h, w = bw.shape
+    # Kernels relative to size
+    h_kernel_len = max(10, w // 40)
+    v_kernel_len = max(10, h // 40)
+
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (h_kernel_len, 1))
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, v_kernel_len))
+
+    horizontal = cv2.erode(bw, horizontal_kernel, iterations=1)
+    horizontal = cv2.dilate(horizontal, horizontal_kernel, iterations=1)
+
+    vertical = cv2.erode(bw, vertical_kernel, iterations=1)
+    vertical = cv2.dilate(vertical, vertical_kernel, iterations=1)
+
+    table_mask = cv2.addWeighted(horizontal, 0.5, vertical, 0.5, 0.0)
+    contours, _ = cv2.findContours(table_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    tables = []
+    for cnt in contours:
+        x, y, ww, hh = cv2.boundingRect(cnt)
+        # filter small regions
+        if ww * hh < 40000:  # tune
+            continue
+        tables.append({"bbox": (x, y, x + ww, y + hh), "cells": None})
+    # Sort top-to-bottom
+    tables = sorted(tables, key=lambda t: (t["bbox"][1], t["bbox"][0]))
+    return tables
+
+
+def extract_tables_unruled(tokens: List[Token]) -> List[Dict[str, Any]]:
+    """
+    Fallback: cluster tokens into rows by y, then infer columns by x peaks.
+    """
+    lines = group_tokens_into_lines(tokens)
+    if len(lines) < 2:
+        return []
+
+    # Build x centers per line; derive columns from global x distribution
+    all_x_centers = []
+    for ln in lines:
+        all_x_centers += [t.cx for t in ln]
+    if not all_x_centers:
+        return []
+
+    # Simple binning on x to infer column bands
+    xs = np.array(sorted(all_x_centers))
+    # heuristic bin width: median token width * 1.2
+    widths = [t.x1 - t.x0 for ln in lines for t in ln]
+    med_w = np.median(widths) if widths else 40
+    bin_w = max(60.0, 1.2 * med_w)
+    # create bands
+    bands = []
+    cur_start = xs[0]
+    for x in xs[1:]:
+        if (x - cur_start) > bin_w:
+            bands.append((cur_start, x))
+            cur_start = x
+    bands.append((cur_start, xs[-1]))
+
+    # Convert bands to x-ranges with padding
+    xbands = []
+    for s, e in bands:
+        x0 = s - 0.6 * med_w
+        x1 = e + 0.6 * med_w
+        if xbands and x0 <= xbands[-1][1]:  # merge overlapping
+            xbands[-1] = (xbands[-1][0], max(xbands[-1][1], x1))
+        else:
+            xbands.append((x0, x1))
+
+    # Assign tokens to nearest band center → build rows
+    tables = []
+    header_detected = False
+    table_rows = []
+    for ln in lines:
+        row = []
+        for (x0, x1) in xbands:
+            # tokens whose center lies in band
+            in_band = [t for t in ln if x0 <= t.cx <= x1]
+            cell_text = " ".join([t.text for t in sorted(in_band, key=lambda t: t.cx)])
+            row.append(cell_text.strip())
+        # Skip empty lines
+        if any(len(c) > 0 for c in row):
+            table_rows.append(row)
+
+    if table_rows:
+        tables.append({"bbox": None, "rows": table_rows, "columns": len(xbands)})
+    return tables
+
+
+def reconcile_tables(tokens: List[Token], ruled: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    For each ruled table bbox, assign tokens to rows via simple y-clustering within bbox,
+    then left-to-right cells via x splitting by whitespace gaps.
+    This is an MVP; improves with line detection / grid intersections later.
+    """
+    final_tables = []
+    for tb in ruled:
+        x0, y0, x1, y1 = tb["bbox"]
+        toks = [t for t in tokens if (x0 <= t.cx <= x1 and y0 <= t.cy <= y1)]
+        if not toks:
+            continue
+        # group into lines by y
+        lines = group_tokens_into_lines(toks)
+        rows = []
+        for ln in lines:
+            # split by large gaps between adjacent tokens
+            if not ln:
+                continue
+            ln = sorted(ln, key=lambda t: t.cx)
+            # Compute gaps
+            gaps = []
+            for i in range(len(ln) - 1):
+                gaps.append(ln[i + 1].x0 - ln[i].x1)
+            # threshold: percentile of gaps
+            if gaps:
+                thr = np.percentile(gaps, 80)
+            else:
+                thr = 40.0
+            cells = []
+            cur = [ln[0]]
+            for i in range(len(ln) - 1):
+                if gaps[i] > thr:
+                    cells.append(" ".join(t.text for t in cur))
+                    cur = [ln[i + 1]]
+                else:
+                    cur.append(ln[i + 1])
+            if cur:
+                cells.append(" ".join(t.text for t in cur))
+            rows.append([c.strip() for c in cells])
+        if rows:
+            # Normalize number of columns to the max columns observed
+            max_cols = max(len(r) for r in rows)
+            norm_rows = [r + [""] * (max_cols - len(r)) for r in rows]
+            final_tables.append({"bbox": tb["bbox"], "rows": norm_rows, "columns": max_cols})
+    return final_tables
+
+
+# =========================
+# Blocks & rendering
+# =========================
+def build_blocks_from_tokens(tokens: List[Token], table_img_bgr: np.ndarray) -> List[Dict[str, Any]]:
+    blocks: List[Dict[str, Any]] = []
+
+    # 1) Lines and plain text
+    lines = group_tokens_into_lines(tokens)
+    text_lines = lines_to_text_lines(lines)
+    headings = detect_headings(lines)
+
+    # 2) Collect heading/paragraph/kv blocks
+    para_buf: List[str] = []
+    last_was_heading = False
+
+    def flush_para():
+        nonlocal para_buf
+        if para_buf:
+            blocks.append({"type": "paragraph", "text": " ".join(para_buf).strip()})
+            para_buf = []
+
+    for i, line in enumerate(text_lines):
+        if not line.strip():
+            flush_para()
+            blocks.append({"type": "spacer"})
+            last_was_heading = False
+            continue
+
+        if i in headings:
+            flush_para()
+            lvl = headings[i]
+            blocks.append({"type": "heading", "level": int(lvl), "text": line.strip()})
+            last_was_heading = True
+            continue
+
+        # KV lines first
+        if (":" in line or " - " in line or " — " in line) and len(line) < 200:
+            # try extract kv safely
+            parts = line.split(":")
+            if len(parts) >= 2 and 1 <= len(parts[0].strip()) <= 40:
+                flush_para()
+                blocks.append({"type": "kv", "key": parts[0].strip(), "value": ":".join(parts[1:]).strip()})
+                last_was_heading = False
+                continue
+
+        # Otherwise accumulate into paragraph (merge successive text lines)
+        if last_was_heading:
+            # likely paragraph starts after heading
+            para_buf.append(line.strip())
+            last_was_heading = False
+        else:
+            # join paragraphs with space
+            if para_buf and not para_buf[-1].endswith((".", ":", ";")):
+                para_buf[-1] = para_buf[-1] + " " + line.strip()
+            else:
+                para_buf.append(line.strip())
+
+    flush_para()
+
+    # 3) Tables
+    ruled_tables = extract_tables_ruled(table_img_bgr)
+    tables_from_ruled = reconcile_tables(tokens, ruled_tables)
+
+    # If no ruled tables detected, try unruled fallback
+    if tables_from_ruled:
+        for tb in tables_from_ruled:
+            blocks.append({"type": "table", "rows": tb["rows"]})
+    else:
+        fallback_tables = extract_tables_unruled(tokens)
+        for tb in fallback_tables:
+            blocks.append({"type": "table", "rows": tb["rows"]})
+
+    # Remove extra spacers
+    compact = []
+    for b in blocks:
+        if b.get("type") == "spacer":
+            if compact and compact[-1].get("type") == "spacer":
+                continue
+        compact.append(b)
+    return compact
+
+
+def render_markdown_txt(
+    file_name: str,
+    page_results: List[PageResult],
+    mode: Mode = Mode.full
+) -> str:
+    lines = []
+    pages_ok = sum(1 for r in page_results if r.metrics.ok)
+
+    # Header
+    lines.append(f"# OCR OUTPUT (SCANNED PDF)")
+    lines.append(f"Source File : {file_name}")
+    lines.append(f"Pages       : {len(page_results)} (ok: {pages_ok}, failed: {len(page_results)-pages_ok})")
+    lines.append(f"Engine      : EasyOCR ({'+'.join(OCR_LANGS)})")
+    lines.append(f"Render DPI  : {DPI}")
+    lines.append("")
+
+    for r in page_results:
+        m = r.metrics
+        lines.append("=" * 60)
+        lines.append(f"Page {r.page_index + 1} — size {m.width}×{m.height}px | blur_var {m.blur_var:.1f} | contrast {m.contrast_std:.1f} | skew {m.skew_deg:.1f}°")
+        if not m.ok:
+            lines.append(f"**FAILED QC** [{m.failure_code}] {m.reason}")
+            lines.append("=" * 60)
+            lines.append("")
+            continue
+        lines.append("=" * 60)
+        lines.append("")
+
+        if mode in (Mode.full, Mode.compact):
+            # headings/kv/paragraphs
+            for b in r.blocks:
+                t = b.get("type")
+                if t == "heading":
+                    lvl = b.get("level", 2)
+                    txt = b.get("text", "")
+                    lvl = max(1, min(3, int(lvl)))
+                    lines.append(f"{'#' * lvl} {txt}")
+                elif t == "kv" and mode != Mode.compact:
+                    lines.append(f"**{b.get('key','').strip()}:** {b.get('value','').strip()}")
+                elif t == "paragraph":
+                    if mode == Mode.full:
+                        lines.append(b.get("text", "").strip())
+                elif t == "table" and mode == Mode.full:
+                    # Render table as Markdown
+                    rows = b.get("rows", [])
+                    if rows:
+                        # header heuristic: use first row as header if text-like & not numeric heavy
+                        header = rows[0]
+                        lines.append("")
+                        # header row
+                        lines.append("| " + " | ".join(_clean_cell(c) for c in header) + " |")
+                        # separator
+                        lines.append("|" + "|".join(["---"] * len(header)) + "|")
+                        # data rows
+                        for row in rows[1:]:
+                            lines.append("| " + " | ".join(_clean_cell(c) for c in row) + " |")
+                        lines.append("")
+
+        if mode == Mode.tables:
+            for b in r.blocks:
+                if b.get("type") == "table":
+                    rows = b.get("rows", [])
+                    if not rows:
+                        continue
+                    # Render as Markdown table
+                    header = rows[0]
+                    lines.append("| " + " | ".join(_clean_cell(c) for c in header) + " |")
+                    lines.append("|" + "|".join(["---"] * len(header)) + "|")
+                    for row in rows[1:]:
+                        lines.append("| " + " | ".join(_clean_cell(c) for c in row) + " |")
+                    lines.append("")
+
+    lines.append("\n" + "=" * 60)
+    lines.append("End of Document")
+    lines.append("=" * 60 + "\n")
+
+    return "\n".join(lines)
+
+
+def _clean_cell(s: str) -> str:
+    s = (s or "").strip()
+    # keep token-light: trim multiple spaces
+    s = " ".join(s.split())
+    return s
+
+
+# =========================
+# Main endpoint
+# =========================
+@app.post("/ocr/process")
+async def ocr_process(
+    file: UploadFile = File(...),
+    mode: Mode = Query(Mode.full, description="Output formatting: full | compact | tables")
+):
+    start = time.time()
+
+    ext = (file.filename.split(".")[-1].lower() if file.filename else "")
+    if ext != "pdf":
+        return JSONResponse({"status": "failure", "reason": "Only PDF files are accepted (scanned PDFs)."}, status_code=400)
+
+    raw = await file.read()
+    try:
+        pages = rasterize_pdf(raw, dpi=DPI)
+    except Exception as e:
+        return JSONResponse({"status": "failure", "reason": f"PDF decoding failed: {e}"}, status_code=400)
+
+    page_results: List[PageResult] = []
+
+    # Process pages sequentially (safe & simple for MVP). You can parallelize later.
+    for idx, pil_img in enumerate(pages):
+        metrics = quality_check_scan(pil_img)
+        if not metrics.ok:
+            page_results.append(PageResult(page_index=idx, metrics=metrics, tokens=[], blocks=[]))
+            continue
+
+        text_bgr, table_bgr, _ = preprocess_for_ocr(pil_img, metrics.skew_deg)
+
+        # OCR
+        tokens = easyocr_tokens(text_bgr)
+
+        # Layout
+        blocks = build_blocks_from_tokens(tokens, table_bgr)
+
+        page_results.append(PageResult(page_index=idx, metrics=metrics, tokens=tokens, blocks=blocks))
+
+        # housekeeping
+        gc.collect()
+
+    # Render text (Markdown-styled) and stream as .txt
+    txt = render_markdown_txt(file.filename, page_results, mode=mode)
+
+    mem = io.BytesIO(txt.encode("utf-8"))
+    mem.seek(0)
+    # Set a filename that includes mode
+    out_name = DEFAULT_OUT_NAME
+    if out_name.endswith(".txt"):
+        base = out_name[:-4]
+        out_name = f"{base}_{mode.value}.txt"
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{out_name}"'
+    }
+    took = time.time() - start
+    headers["X-Processing-Time-ms"] = str(int(1000 * took))
+
+    return StreamingResponse(mem, media_type="text/plain; charset=utf-8", headers=headers)
+
+
+# Optional: health
+@app.get("/health")
+def health():
+    return {"status": "ok", "engine": f"easyocr({'/'.join(OCR_LANGS)})", "dpi": DPI, "gpu": GPU}

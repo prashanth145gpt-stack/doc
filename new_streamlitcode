@@ -1,0 +1,930 @@
+import streamlit as st
+import base64
+import tempfile
+# from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from pdf_processor import process_pdf
+import requests
+import json
+import datetime
+
+# try:
+#     oracledb.init_oracle_client(lib_dir=r"D:\instantclient_23_0")
+# except Exception:
+#     pass
+
+
+# def get_conn():
+#     return oracledb.connect(user=ORACLE_USER, password=ORACLE_PASS, dsn=ORACLE_DSN)
+
+# def save_to_db(file_name, json_data, is_edited='N'):
+#     try:
+#         with get_conn() as conn:
+#             with conn.cursor() as cur:
+#                 json_str = json.dumps(json_data)
+               
+#                 if is_edited == 'Y':
+#                     cur.execute("SELECT count(*) FROM app_fields WHERE file_name = :1 AND is_edited = 'Y'", [file_name])
+#                     if cur.fetchone()[0] > 0:
+#                         cur.execute("""
+#                             UPDATE app_fields SET json_extract = :1, created_at = CURRENT_TIMESTAMP
+#                             WHERE file_name = :2 AND is_edited = 'Y'
+#                         """, [json_str, file_name])
+#                     else:
+#                         cur.execute("""
+#                             INSERT INTO app_fields (file_name, json_extract, is_edited)
+#                             VALUES (:1, :2, 'Y')
+#                         """, [file_name, json_str])
+               
+#                 else:
+#                     cur.execute("SELECT count(*) FROM app_fields WHERE file_name = :1 AND is_edited = 'N'", [file_name])
+#                     if cur.fetchone()[0] > 0:
+#                         cur.execute("""
+#                             UPDATE app_fields SET json_extract = :1, created_at = CURRENT_TIMESTAMP
+#                             WHERE file_name = :2 AND is_edited = 'N'
+#                         """, [json_str, file_name])
+#                     else:
+#                         cur.execute("""
+#                             INSERT INTO app_fields (file_name, json_extract, is_edited)
+#                             VALUES (:1, :2, 'N')
+#                         """, [file_name, json_str])
+               
+#                 conn.commit()
+#     except Exception as e:
+#         st.error(f"Database Error: {e}")
+
+# db_api = DANDBService(
+#     user=os.getenv("ORACLE_USER"),
+#     password=os.getenv("ORACLE_PASS"),
+#     dsn=os.getenv("ORACLE_DSN")
+# )
+
+db_url = "https://file-extractordev.sidbi.in/oracle-db-service"
+BASE_DIR = Path(__file__).resolve().parent
+header_img_path = BASE_DIR / "static" / "SIDBI_LOGO.png"
+#LLM_API_URL = "http://172.30.1.200/dan-financial-analysis-agent/financial-analysis" #latest
+#LLM_API_URL = "http://172.30.1.200:7000/financial-analysis" # v1
+LLM_API_URL = "https://file-extractordev.sidbi.in/dan-financial-analysis-agent/financial-analysis" #latest
+
+MAX_WORKERS = 6
+
+def db_request(endpoint,data):
+    try:
+        resp = requests.post(f"{db_url}/{endpoint}",json=data)
+        if resp.status_code != 200:
+            st.error(f"API error {resp.status_code}:{resp.text}")
+            return False,None
+        return resp.status_code==200, resp.json()
+    except Exception as e:
+        st.error(f"Database API error: {str(e)}")
+        return False,None
+
+
+SECTION_MAP = [
+    ("sales_fluctuation",          "Sales Fluctuation"),
+    ("profitability",               "Profitability"),
+    ("high_leverage",               "High Leverage"),
+    ("liquidity_position",          "Liquidity Position"),
+    ("capital_fluctuation",         "Capital Fluctuation"),
+    ("unsecured_loans",             "Unsecured Loans"),
+    ("notes_on_accounts",           "Notes on Accounts / Auditor Remarks"),
+    ("contingent_liabilities",      "Contingent Liabilities"),
+    ("unhedged_forex_exposure",     "Unhedged Forex Exposure"),
+    ("investment_in_group_companies","Investment in Group Companies"),
+]
+
+def _json_to_html(company_name: str, json_data: dict) -> str:
+    """
+    Convert company_name + json_data dict → styled HTML string
+    matching the Financial Analysis Report template.
+    """
+ 
+    # Build ordered list of (display_title, text) tuples
+    known_keys  = [k for k, _ in SECTION_MAP]
+    label_lookup = {k: v for k, v in SECTION_MAP}
+ 
+    sections = []
+ 
+    # 1. Add known keys in defined order (only if present in json_data)
+    for key, label in SECTION_MAP:
+        if key in json_data:
+            sections.append((label, json_data[key]))
+ 
+    # 2. Append any extra keys the LLM returned that aren't in SECTION_MAP
+    for key, value in json_data.items():
+        if key not in known_keys:
+            label = key.replace("_", " ").title()
+            sections.append((label, value))
+ 
+    # ── Build section HTML ────────────────────────────────────────────────────
+    sections_html = ""
+    for i, (title, text) in enumerate(sections, start=1):
+        sections_html += f"""
+    <div class="section">
+        <div class="section-title">{i}. {title}</div>
+        <div class="section-text">{text}</div>
+    </div>"""
+ 
+    # ── Full HTML ─────────────────────────────────────────────────────────────
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{
+            font-family: "Segoe UI", Arial, sans-serif;
+            background-color: #f5f7fa;
+            margin: 0;
+            padding: 40px;
+            color: #2c3e50;
+        }}
+        .container {{
+            max-width: 1000px;
+            margin: auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+        }}
+        .header {{
+            border-bottom: 3px solid #1f4e79;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }}
+        .header h1 {{
+            margin: 0;
+            font-size: 28px;
+            color: #1f4e79;
+        }}
+        .header p {{
+            margin: 5px 0 0;
+            color: #666;
+            font-size: 14px;
+        }}
+        .section {{
+            margin-bottom: 22px;
+            padding: 18px 20px;
+            border-left: 4px solid #1f4e79;
+            background: #f9fbfd;
+            border-radius: 4px;
+        }}
+        .section-title {{
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #1f4e79;
+        }}
+        .section-text {{
+            font-size: 14px;
+            line-height: 1.6;
+        }}
+        .footer {{
+            margin-top: 40px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }}
+    </style>
+</head>
+<body>
+<div class="container">
+ 
+    <div class="header">
+        <h1>Financial Analysis Report</h1>
+        <p>{company_name} — Automated Financial Statement Commentary</p>
+    </div>
+ 
+    {sections_html}
+ 
+    <div class="footer">
+        Generated using SIDBI AI Engine
+    </div>
+ 
+</div>
+</body>
+</html>"""
+
+# ================== CONFIG ==================
+st.set_page_config(page_title="Financial Document Analyzer", layout="wide")
+
+img_tag = ""
+try:
+    if header_img_path.exists():
+        with open(header_img_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode("utf-8")
+        img_tag = f"<img src='data:image/png;base64,{img_b64}' alt='logo' style='height:64px; max-width:250px; object-fit:contain; display:block;'/>"
+except:
+    img_tag = ""
+# # For main header in page
+
+st.markdown("""
+<style>
+/* your CSS goes here */
+</style>
+""", unsafe_allow_html=True)
+
+# ✅ ✅ STEP 2: Custom header comes AFTER CSS
+st.markdown(f"""
+<div class="header-wrap">
+    <div>{img_tag}</div>
+    <div class="header-text">
+        <h2 style="margin:0;color:black;">Financial Document Analyzer</h2>
+        <p style="margin:0;color:gray;font-size:1rem;">
+            Upload financial documents and let AI analyze them.
+        </p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+
+
+st.markdown(f"""
+<style>
+
+/* ----------------- Global ----------------- */
+body {{
+    font-family: "Segoe UI", sans-serif;
+}}
+
+/* Hide default Streamlit header */
+.stAppHeader {{
+    display: none !important;
+}}
+
+/* ----------------- Custom Header ----------------- */
+.header-wrap {{
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    box-shadow: 1px 2px 5px #bdbcbc;
+    border-radius: 10px;
+    margin-bottom: 16px;
+}}
+
+.header-text {{
+    flex: 1;
+    text-align: center;
+}}
+
+/* ----------------- File Uploader ----------------- */
+[data-testid="stFileUploader"] {{
+    border: 1.5px dashed #d1d5db;
+    border-radius: 10px;
+    padding: 6px 10px;
+    background: #f9fafb;
+    margin-bottom: 6px;
+}}
+
+[data-testid="stFileUploader"]:hover {{
+    border-color: #2563eb;
+    background: #eff6ff;
+}}
+
+/* Change uploader button label text */
+div[data-testid="stFileUploader"] button[kind="secondary"] {{
+    font-size: 0 !important;
+}}
+
+div[data-testid="stFileUploader"] button[kind="secondary"]::after {{
+    content: "Upload PDF";
+    font-size: 14px !important;
+    font-weight: 600;
+    color: #2563eb;
+}}
+
+/* ----------------- Text Area (Prompt) ----------------- */
+[data-testid="stTextArea"] textarea {{
+    border: 1.5px solid #d1d5db !important;
+    border-radius: 10px !important;
+    font-size: 0.9rem !important;
+    background: #fafafa !important;
+    resize: vertical !important;
+}}
+
+[data-testid="stTextArea"] textarea:focus {{
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important;
+    background: #ffffff !important;
+}}
+
+/* ----------------- Primary Buttons ----------------- */
+div[data-testid="stButton"] > button[kind="primary"] {{
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 9px !important;
+    font-weight: 600 !important;
+    width: 100% !important;
+    padding: 10px 0 !important;
+    transition: opacity 0.2s ease-in-out !important;
+}}
+
+div[data-testid="stButton"] > button[kind="primary"]:hover {{
+    opacity: 0.88 !important;
+}}
+
+/* ----------------- Uploaded Docs Box (Pattern A) ----------------- */
+.uploaded-docs-box {{
+    background: #f8f9fa;
+    border: 1px solid #dcdcdc;
+    border-radius: 9px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+}}
+
+.uploaded-docs-box ul {{
+    padding-left: 18px;
+}}
+
+.uploaded-docs-box li {{
+    font-size: 0.9rem;
+    margin: 4px 0;
+}}
+
+/* ----------------- AI Analysis iframe ----------------- */
+iframe {{
+    border: 1px solid #85929E !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}}
+
+/* ----------------- Status Pills (for later use) ----------------- */
+.pill-ready {{
+    display: inline-block;
+    background: #dcfce7;
+    color: #15803d;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 6px;
+}}
+
+.pill-pending {{
+    display: inline-block;
+    background: #fef9c3;
+    color: #854d0e;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 6px;
+}}
+
+</style>
+""", unsafe_allow_html=True)
+
+####
+
+
+if "analysis_ready" not in st.session_state:
+    st.session_state["analysis_ready"] = False
+if "modules" not in st.session_state:
+    st.session_state["modules"]={
+        "balance_sheet":{
+            "uploaded":False,
+            "prompt":"",
+            "response":"",
+            "completed":False
+        },
+        "risk_analysis":{
+            "uploaded":False,
+            "prompt":"",
+            "response":"",
+            "completed":False
+        },
+        "compliance":{
+            "uploaded":False,
+            "prompt":"",
+            "response":"",
+            "completed":False
+        },
+        "credit_score":{
+            "uploaded":False,
+            "prompt":"",
+            "response":"",
+            "completed":False
+        }
+    }
+if "active_module" not in st.session_state:
+    st.session_state["active_module"] = "balance_sheet"
+
+
+
+
+#module navigation
+
+modules = st.session_state["modules"]
+active_module = st.session_state["active_module"]
+if "dan_app_id" not in st.session_state:
+    st.session_state["dan_app_id"] = f"dan_{datetime.datetime.now().strftime('%x_%X')}"
+if "udyam_number" not in st.session_state:
+    st.session_state["udyam_number"] = f"udyam_{datetime.datetime.now().strftime('%x_%X')}"
+
+# def tile(label, key):
+#     module = modules[key]
+
+#     if module["completed"]:
+#         color = "#d4edda"
+#     elif module["uploaded"]:
+#         color = "#fff3cd"
+#     else:
+#         color = "#f5f5f5"
+
+#     border = "3px solid #1f4e79" if key == active_module else "1px solid #ccc"
+#     if st.button(label, key=key, use_container_width=True):
+#         st.session_state["active_module"] = key
+
+#     st.markdown(
+#         f"""
+#         <div style="
+#             background:{color};
+#             border:{border};
+#             padding:10px;
+#             border-radius:10px;
+#             text-align:center;
+#             font-weight:600;
+#             margin-bottom:10px;
+#         ">
+#         </div>
+#         """,
+#         unsafe_allow_html=True
+#     )
+
+#     if st.button(label, key=f"{key}_hidden"):
+#         st.session_state["active_module"] = key
+
+
+# col1, col2, col3, col4 = st.columns(4)
+
+# with col1:
+#     tile("Balance Sheet", "balance_sheet")
+
+# with col2:
+#     tile("Risk Analysis", "risk_analysis")
+
+# with col3:
+#     tile("Compliance", "compliance")
+
+# with col4:
+#     tile("Credit Score", "credit_score")
+
+def module_tile(label, key):
+    module = st.session_state["modules"][key]
+
+    # Status text inside tile
+    status = "✔" if module.get("completed") else "⧗"
+
+    btn_label = f"{label}   {status}"
+
+    if st.button(
+        btn_label,
+        key=f"tile_{key}",
+        use_container_width=True
+    ):
+        st.session_state["active_module"] = key
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    module_tile("Balance Sheet", "balance_sheet")
+
+with col2:
+    module_tile("Risk Analysis", "risk_analysis")
+
+with col3:
+    module_tile("Compliance", "compliance")
+
+with col4:
+    module_tile("Credit Score", "credit_score")
+
+
+active_module = st.session_state["active_module"]
+
+if "last_module" not in st.session_state:
+    st.session_state["last_module"] = active_module
+
+if st.session_state["last_module"] != active_module:
+    st.session_state.pop("uploader_processed", None)
+    st.session_state["last_module"] = active_module
+
+# def process_file(uploaded_file):
+#     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+#         tmp.write(uploaded_file.read())
+#         path = tmp.name
+
+#     text = process_pdf(path)
+
+#     return {
+#         "filename":uploaded_file.name,
+#         "text":text
+#     }
+
+left, middle, right = st.columns([1,1, 2])
+
+HARDCODED_JSON = {
+    "company_name": "Mahinder Pal Traders",
+    "sales_fluctuation":            "No revenue/sales figures are available in the balance sheet provided. Only a single year (FY 2017-18) balance sheet is available, so no trend analysis on sales fluctuation is possible.",
+    "profitability":                "Current period profit is ₹5.18 lakhs which has been fully transferred to the capital account. In the absence of a P&L statement and prior year data, margin analysis cannot be performed.",
+    "high_leverage":                "Total debt (secured ₹8.00L + unsecured ₹5.00L = ₹13.00L) against tangible net worth of ₹25.05L results in a D/E ratio of ~0.52x, which is moderate.",
+    "liquidity_position":           "Current ratio is ~8.78x (current assets ₹24.37L / current liabilities ₹2.78L). Cash-in-hand shows a negative balance of ₹4,946 — unusual and warrants clarification.",
+    "capital_fluctuation":          "Proprietorship capital of ₹25.05L held by Mahinder Pal. Current year profit of ₹5.18L fully transferred to capital. Only one year of data available.",
+    "unsecured_loans":              "Unsecured loans of ₹5.00L are present, constituting ~20% of net worth. Source, terms, and repayment schedule are not disclosed and should be verified.",
+    "notes_on_accounts":            "No auditor's report or notes on accounts available. Negative cash-in-hand of ₹4,946 and an undisclosed Suspense Account warrant clarification.",
+    "contingent_liabilities":       "No adverse observation. No contingent liabilities are disclosed in the balance sheet provided.",
+    "unhedged_forex_exposure":      "No adverse observation. No unhedged forex exposure information is mentioned.",
+    "investment_in_group_companies":"The Investments line item appears on the balance sheet with no value — nil investments in group companies.",
+}
+# st.markdown("""
+# <style>
+# .uploader-label {
+#     font-size: 24px;      /* ← adjust this */
+#     font-weight: 600;     /* semi-bold */
+#     margin-bottom: 6px;
+# }
+# </style>
+# <div class="uploader-label">Upload Balance Sheet / P&amp;L PDFs</div>
+# """, unsafe_allow_html=True)
+
+# --- The uploader with its label hidden ---
+
+with left:
+    st.subheader(" Financial Documents")
+    active_module = st.session_state["active_module"]
+    module_data = st.session_state["modules"][active_module]
+
+# ✅ Pattern A: Previously uploaded documents
+    if module_data.get("raw_docs"):
+        st.markdown(
+            "<div class='uploaded-docs-box'><b> Uploaded documents:</b><ul>",
+            unsafe_allow_html=True
+        )
+        for doc in module_data["raw_docs"]:
+            st.markdown(f"<li> {doc['name']}</li>", unsafe_allow_html=True)
+        st.markdown("</ul></div>", unsafe_allow_html=True)
+
+
+    uploaded_files = st.file_uploader(
+        label="Upload Balance Sheet / P&L PDFs",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key=f"uploader_{active_module}",#for module-specific upload 
+        label_visibility="collapsed"   # hides default label
+    )
+    if uploaded_files:
+        module_data["raw_docs"]=[
+            {"name":f.name, "bytes":f.getvalue()} for f in uploaded_files
+        ]
+        module_data["uploaded"] = True
+
+        # active_module = st.session_state["active_module"]
+        # st.session_state["modules"][active_module]["raw_docs"] = [{"name":f.name, "bytes":f.getvalue()} for f in uploaded_files]
+
+        # st.session_state["modules"][active_module]["uploaded"] = True
+        # st.session_state["uploader_processed"] = None
+        # st.rerun()
+        # #st.success(f"{len(uploaded_files)} files uploaded")
+        
+
+    # if uploaded_files:
+    #     st.session_state["files"] = uploaded_files
+    if st.button("Process Documents"):
+
+        active_module = st.session_state["active_module"]
+        module_data = st.session_state["modules"][active_module]
+        if module_data.get("raw_docs"):
+            for f in module_data["raw_docs"]:
+                st.info(f"{f['name']}")
+        if not module_data.get("raw_docs"):
+            st.error("Upload files first")
+        else:
+            results = []
+            progress = st.progress(0)
+
+            for i, file in enumerate(st.session_state["modules"][active_module]["raw_docs"]):
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(file["bytes"])
+                    path = tmp.name
+
+                text = process_pdf(path)
+
+                results.append({
+                    "filename": file["name"],
+                    "text": text
+                })
+                progress.progress((i + 1) / len(st.session_state["modules"][active_module]["raw_docs"]))
+            st.success("All PDFs processed")
+            st.session_state["modules"][active_module]["filenames"] = [r["filename"] for r in results]
+            # ✅ Combine text
+            combined_text = ""
+
+            for r in results:
+                combined_text += f"\n\n===== {r['filename']} ====\n\n"
+                combined_text += r["text"] or ""
+            # print(st.session_state["modules"][active_module]["filenames"])
+            st.session_state["modules"][active_module]["document_text"] = combined_text
+            #ready for llm
+            #st.session_state["ready_for_llm"] = True
+            st.session_state["llm_called"] = False   # reset flag
+    #if st.session_state.get("ready_for_llm") and st.session_state.get("document_text"):
+    active_module= st.session_state["active_module"]
+    module_data=st.session_state["modules"][active_module]
+    # print(module_data.get("completed"))
+    if module_data.get("document_text"):
+
+        if not module_data.get("completed"):
+
+            # st.write("Calling LLM API...")
+
+            with st.spinner("Running Analysis........"):
+                # time.sleep(3)
+                data = {
+                    "financial_text": module_data["document_text"]
+                }
+                try:
+                    st.write("Calling LLM API: ",LLM_API_URL)
+                    resp = requests.post(
+                    LLM_API_URL,
+                    data=data,
+                    timeout=6000,
+                    proxies= {"http":None, "https":None},
+                    verify=False
+                )
+                    st.write("STATUS: ",resp.status_code)
+                    if resp.status_code==200:
+                        try:      
+                            llm_response = json.loads(resp.text)
+                            #llm_response = HARDCODED_JSON
+                            company_name = llm_response.get("company_name","Financial Report")
+                            st.session_state["modules"][active_module]["raw_json"] = llm_response
+                            docs = st.session_state["modules"][active_module].get("raw_docs",[])
+                            fnames = st.session_state["modules"][active_module].get("filenames",[])
+                            # print(docs[0]["name"])
+                            # db_api.insert_user(st.session_state["dan_app_id"],company_name,st.session_state["udyam_number"])
+                            company_ok,_ = db_request("dan_company_info",{
+                                "dan_app_id" : st.session_state["dan_app_id"],
+                                "company_name": company_name,
+                                "udyam_number" : st.session_state["udyam_number"]  
+                            })
+                            for r in fnames:
+                                fname = r if r else f"File_{st.session_state['dan_app_id']}"
+                                finance_ok , _ =db_request("dan_financial_info",{
+                                    "dan_app_id" : st.session_state["dan_app_id"],
+                                    "file_name" : fname,
+                                    "module_key" : active_module,
+                                    "json_data": str(llm_response),
+                                    "is_edited" : False
+                                })
+                                # db_api.insert_json(
+                                #     dan_app_id=st.session_state["dan_app_id"],
+                                #     file_name=fname,
+                                #     module_key=active_module,
+                                #     json_data=llm_response,
+                                #     is_edited=False
+                                # )
+                            # save_to_db(fname,llm_response,is_edited='N')
+                            html_output = _json_to_html(company_name, llm_response)
+                            # print(active_module)
+                            active_module = st.session_state["active_module"]
+                            st.session_state["modules"][active_module]["response"] = html_output
+                            st.session_state["modules"][active_module]["completed"] = True
+
+                            #st.session_state["html_output"] = html_output
+                            st.session_state["analysis_ready"] = True
+                            #st.session_state["llm_called"] = True
+                        except Exception as e:
+                            st.error((f"Json Parsing failed: {e}"))
+                            # st.write(resp.text)
+                except Exception as e:
+                    st.write(f"API CALL FAIL: {e}")         
+                # resp = requests.post(
+                #     LLM_API_URL,
+                #     data=data,
+                #     timeout=6000
+                # )
+                # st.write(resp.status_code)
+                # if resp.status_code == 200:
+                #     st.session_state["html_output"] = resp.text
+                #     st.session_state["analysis_ready"] = True
+                #     st.session_state["llm_called"] = True
+                # else:
+                #     st.error("LLM API request failed!") 
+                #     resp.raise_for_status()      
+
+    #             # OLD app
+    #             # for r in results:
+    #             #     combined_text += f"\n\n===== {r['filename']} ====\n\n"
+    #             #     combined_text += r["text"] or ""
+
+    #             # st.session_state["combined_text"] = combined_text
+
+with middle:
+    st.subheader("Prompt")
+    active_module = st.session_state["active_module"]
+    prompt = st.text_area(
+        "Enter Prompt",
+        label_visibility="collapsed",
+        value = st.session_state["modules"][active_module]["prompt"],
+        placeholder = "E.g, Analyse balnce sheets...."
+        )
+    st.session_state["modules"][active_module]["prompt"] = prompt
+
+
+# with right:
+#     active_module = st.session_state["active_module"]
+#     module_data = st.session_state["modules"][active_module]
+
+#     if module_data.get("response"):
+#         st.subheader("AI Analysis")
+
+#         st.components.v1.html(
+#             module_data["response"],
+#             height=500,
+#             scrolling=True
+#         )
+#         st.markdown(
+#                 """
+#                 <style>
+#                 iframe{
+#                 border: 1px solid #85929E !important;
+#                 border-radius: 6px !important;
+#                 box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            
+#                 }
+#                 div[data-testId="stVerticalBlock"]{
+#                 margin-top: 15px !important;
+#                 }
+#                 </style>
+#                 """,
+#                 unsafe_allow_html=True)    
+
+with right:
+    active_module = st.session_state["active_module"]
+    module_data = st.session_state["modules"][active_module]
+    if module_data.get("response"):
+        st.subheader("AI Analysis")
+        edit_mode_key = f"edit_active_{active_module}"
+        if edit_mode_key not in st.session_state:
+            st.session_state[edit_mode_key] = False
+        if not st.session_state[edit_mode_key]:
+            if st.button("Edit Report Values", key=f"edit_btn_{active_module}", use_container_width=True):
+                st.session_state[edit_mode_key] = True
+                st.rerun()
+            st.components.v1.html(module_data["response"], height=600, scrolling=True)
+        else:
+            st.markdown("### Update Field Values")
+            current_json = module_data.get("raw_json", {})
+            updated_json = {}
+            for key, label in SECTION_MAP:
+                if key in current_json:
+                    updated_json[key] = st.text_area(label, value=current_json[key], height=150)
+            for key, value in current_json.items():
+                if key not in [k for k, _ in SECTION_MAP] and key != "company_name":
+                    disp = key.replace("_", " ").title()
+                    updated_json[key] = st.text_area(disp, value=value, height=150)
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Save & Update HTML", key=f"save_{active_module}", type="primary", use_container_width=True):
+                    st.session_state["modules"][active_module]["raw_json"] = updated_json
+                    comp_name = current_json.get("company_name", "Financial Report")
+                    new_html = _json_to_html(comp_name, updated_json)
+                    st.session_state["modules"][active_module]["response"] = new_html
+                    docs = st.session_state["modules"][active_module].get("raw_docs",[])
+                    for r in fnames:
+                        fname = r if r else f"Edited File_{st.session_state['dan_app_id']}"
+                        # db_api.insert_user(st.session_state["dan_app_id"],comp_name,st.session_state["udyam_number"])
+                        # company_ok,_ = db_request("dan_company_info",{
+                        #             "dan_app_id" : st.session_state["dan_app_id"],
+                        #             "company_name": company_name,
+                        #             "udyam_number" : st.session_state["udyam_number"]  
+                        #         })
+                        finance_ok , _ =db_request("dan_financial_info",{
+                                        "dan_app_id" : st.session_state["dan_app_id"],
+                                        "file_name" : fname,
+                                        "module_key" : active_module,
+                                        "json_data": str(updated_json),
+                                        "is_edited" : True
+                                    })
+                    # db_api.insert_json(
+                    #     dan_app_id=st.session_state["dan_app_id"],
+                    #     file_name=fname,
+                    #     module_key=active_module,
+                    #     json_data=updated_json,
+                    #     is_edited=True
+                    # )
+                    # save_to_db(fname,updated_json,is_edited='Y')
+                    st.session_state[edit_mode_key] = False
+                    st.rerun()
+            with c2:
+                if st.button("Cancel", key=f"cancel_{active_module}", use_container_width=True):
+                    st.session_state[edit_mode_key] = False
+                    st.rerun()
+
+# ================== FINAL SUBMIT ==================
+
+st.markdown("---")
+
+left_space, right_button = st.columns([4, 1])
+
+with right_button:
+    active_module = st.session_state["active_module"]
+    module_data = st.session_state["modules"][active_module]
+    # modules = st.session_state.get("modules",{})
+    # any_completed = any(m.get("completed") for m in modules.values())
+
+    # if not any_completed:
+    #     st.error("Please complete at least one module before submitting")
+    # else:
+    #     html_content = module_data.get("response")
+    #     final_data = {}
+    #     for module_name, module_data in modules.items():
+    #         final_data[module_name] = {
+    #             "prompt": module_data.get("prompt"),
+    #             "response": module_data.get("response")
+    #         }
+
+    #     st.success("All modules submitted successfully")
+    html_content = module_data.get("response","")
+    st.download_button(
+        label="Submit & Download",
+        data = html_content,
+        file_name=f"Analysis_{st.session_state['dan_app_id']}.html",
+        mime="text/html",
+        type="primary",
+        use_container_width=True
+    )
+            #st.json(final_data)
+
+
+st.markdown("""
+<script>
+const buttons = window.parent.document.querySelectorAll('button');
+buttons.forEach(btn => {
+    if (btn.innerText === 'Submit All Analysis') {
+        btn.classList.add('submit-green');
+    }
+});
+</script>
+""", unsafe_allow_html=True)
+
+
+
+st.markdown("""
+<style>
+
+/* ================= FILE UPLOADER ================= */
+div[data-testid="stFileUploader"] button[kind="secondary"]{
+    font-size: 0 !important;
+}
+div[data-testid="stFileUploader"] button[kind="secondary"]::after {
+    content: "";
+    font-size: 14px !important;
+}
+
+/* ================= GLOBAL BUTTON STYLE ================= */
+div.stButton > button {
+    background-color: #e0e0e0;
+    color: #000000;
+    border-radius: 8px;
+    height: 42px;
+    font-weight: 500;
+    border: 1px solid #c7c7c7;
+    transition: 0.2s ease;
+}
+
+/* Hover */
+div.stButton > button:hover {
+    background-color: #d6d6d6;
+}
+
+/* ================= ACTIVE TILE (we'll use next step) ================= */
+button[data-active="true"] {
+    background-color: #1f4e79 !important;
+    color: white !important;
+    border: 1px solid #1f4e79 !important;
+}
+
+/* ================= SUBMIT BUTTON ================= */
+button[kind="primary"] {
+    background-color: #28a745 !important;
+    color: white !important;
+    border: none !important;
+}
+
+/* ================= REMOVE EXTRA SPACING ================= */
+div[data-testid="stHorizontalBlock"] {
+    gap: 10px;
+}
+
+/* Clean layout */
+.block-container {
+    padding-top: 20px;
+}
+
+</style>
+""", unsafe_allow_html=True)
